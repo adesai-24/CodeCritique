@@ -1,0 +1,23 @@
+# Python Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints
+
+# Tool Caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Build/Distribution
+dist/
+build/
+*.egg-info/
