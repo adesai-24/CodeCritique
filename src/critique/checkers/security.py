@@ -42,7 +42,6 @@ class BanditChecker(BaseChecker):
                     reasoning=f"Security risk detected ({sev_str})."
                 ))
                 
-        except Exception as e:
-            console.print(f"[bold red]Error running Bandit: {str(e)}[/bold red]")
+        except Exception:
             pass
         return issues
