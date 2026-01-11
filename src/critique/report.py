@@ -3,7 +3,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
-from code_critique.checkers.base import Issue, Severity
+from critique.checkers.base import Issue, Severity
 
 console = Console()
 

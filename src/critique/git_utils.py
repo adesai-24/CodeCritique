@@ -32,7 +32,7 @@ def install_pre_push_hook():
     # CodeCritique Hook
     echo "Running CodeCritique..."
     # Run check. If it fails (exit 1), the push stops.
-    "{executable}" -m code_critique.cli check --incremental
+    "{executable}" -m critique.cli check --incremental
     """
 
     with open(hook_path, "w") as f:

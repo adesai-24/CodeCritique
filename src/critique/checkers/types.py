@@ -1,7 +1,7 @@
 import subprocess
 import re
 from typing import List
-from code_critique.checkers.base import BaseChecker, Issue, Severity
+from critique.checkers.base import BaseChecker, Issue, Severity
 
 class MypyChecker(BaseChecker):
     name = "Mypy (Types)"

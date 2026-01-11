@@ -3,13 +3,13 @@ import os
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from code_critique.git_utils import get_changed_files
-from code_critique.checkers.base import Issue
-from code_critique.checkers.python_lint import RuffChecker
-from code_critique.checkers.python_security import BanditChecker
-from code_critique.checkers.python_types import MypyChecker
-from code_critique.checkers.python_coverage import CoverageChecker
-from code_critique.report import print_report
+from critique.git_utils import get_changed_files
+from critique.checkers.base import Issue
+from critique.checkers.lint import RuffChecker
+from critique.checkers.security import BanditChecker
+from critique.checkers.types import MypyChecker
+from critique.checkers.coverage import CoverageChecker
+from critique.report import print_report
 
 console = Console()
 

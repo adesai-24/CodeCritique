@@ -2,7 +2,7 @@ import subprocess
 import json
 import os
 from typing import List
-from code_critique.checkers.base import BaseChecker, Issue, Severity
+from critique.checkers.base import BaseChecker, Issue, Severity
 
 class CoverageChecker(BaseChecker):
     name = "Coverage"

@@ -1,7 +1,7 @@
 import subprocess
 import json
 from typing import List
-from code_critique.checkers.base import BaseChecker, Issue, Severity
+from critique.checkers.base import BaseChecker, Issue, Severity
 
 class BanditChecker(BaseChecker):
     name = "Bandit (Security)"

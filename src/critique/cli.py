@@ -1,8 +1,8 @@
 import typer
 from typing import Optional
 from typing_extensions import Annotated
-from code_critique.runner import run_all_checks
-from code_critique.git_utils import install_pre_push_hook
+from critique.runner import run_all_checks
+from critique.git_utils import install_pre_push_hook
 
 app = typer.Typer(help="CodeCritique: A pre-push quality gate for your code.")
 

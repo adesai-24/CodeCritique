@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "code-critique"
+name = "critique"
 version = "0.1.0"
 description = "A native Code Critique tool for pre-push checks."
 readme = "README.md"
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-critique = "code_critique.cli:app"
+critique = "critique.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["code_critique"]
+packages = ["src/critique"]
