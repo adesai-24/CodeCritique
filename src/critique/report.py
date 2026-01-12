@@ -34,7 +34,6 @@ def print_report(issues: List[Issue]) -> bool:
     for issue in fatal_issues + warnings + infos:
         sev_style = "red" if issue.severity == Severity.FATAL else "yellow" if issue.severity == Severity.WARNING else "blue"
         
-        # Use relative path for cleaner display
         try:
             display_path = os.path.relpath(issue.file_path)
         except Exception:
@@ -53,11 +52,9 @@ def print_report(issues: List[Issue]) -> bool:
 
     console.print(table)
 
-    # 2. Generate Interactive HTML Report
     report_path = generate_html_report(issues)
     console.print(f"\n[bold blue]Interactive report generated at: {report_path}[/bold blue]")
     
-    # Optionally open it automatically
     try:
         webbrowser.open(f"file://{os.path.abspath(report_path)}")
     except Exception:
@@ -79,7 +76,6 @@ def generate_html_report(issues: List[Issue]) -> str:
     """
     report_file = "critique_report.html"
     
-    # Prepare data for JS
     issues_data = []
     for i in issues:
         try:
@@ -94,7 +90,9 @@ def generate_html_report(issues: List[Issue]) -> str:
             "column": i.column,
             "message": i.message,
             "code": i.code,
-            "reasoning": i.reasoning
+            "reasoning": i.reasoning,
+            "code_context": i.code_context,
+            "context_start_line": max(1, i.line - 3)
         })
 
     html_template = f"""
@@ -317,9 +315,38 @@ def generate_html_report(issues: List[Issue]) -> str:
             padding: 1.5rem;
             border-radius: 12px;
             font-family: var(--font-mono);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             overflow-x: auto;
             border: 1px solid var(--glass-border);
+            line-height: 1.5;
+        }}
+
+        .code-snippet pre {{
+             margin: 0;
+        }}
+
+        .code-line {{
+            display: flex;
+            gap: 1.5rem;
+        }}
+
+        .line-num {{
+            color: var(--text-dim);
+            text-align: right;
+            min-width: 2.5rem;
+            user-select: none;
+            opacity: 0.5;
+        }}
+
+        .line-content {{
+            white-space: pre;
+        }}
+
+        .line-error {{
+            background: rgba(239, 68, 68, 0.15);
+            margin: 0 -1.5rem;
+            padding: 0 1.5rem;
+            border-left: 3px solid var(--fatal-red);
         }}
 
         /* Custom scrollbar */
@@ -373,8 +400,8 @@ def generate_html_report(issues: List[Issue]) -> str:
 
             <div class="detail-section">
                 <h4>Context</h4>
-                <div class="code-snippet">
-                    <pre><code id="detailCodeSnippet"># Code context not available in this view yet.</code></pre>
+                <div class="code-snippet" id="detailCodeSnippet">
+                    <!-- Context injected here -->
                 </div>
             </div>
         </div>
@@ -419,6 +446,33 @@ def generate_html_report(issues: List[Issue]) -> str:
             document.getElementById('detailLoc').innerText = `Line ${{issue.line}}${{issue.column ? ', Col ' + issue.column : ''}}`;
             document.getElementById('detailCode').innerText = issue.code;
             document.getElementById('detailReasoning').innerText = issue.reasoning || 'No specific reasoning provided.';
+
+            // Render Context
+            const contextContainer = document.getElementById('detailCodeSnippet');
+            contextContainer.innerHTML = '';
+            
+            if (issue.code_context && issue.code_context.length > 0) {{
+                issue.code_context.forEach((line, i) => {{
+                    const lineNum = issue.context_start_line + i;
+                    const isErrorLine = lineNum === issue.line;
+                    
+                    const lineDiv = document.createElement('div');
+                    lineDiv.className = `code-line ${{isErrorLine ? 'line-error' : ''}}`;
+                    lineDiv.innerHTML = `
+                        <span class="line-num">${{lineNum}}</span>
+                        <span class="line-content">${{escapeHtml(line)}}</span>
+                    `;
+                    contextContainer.appendChild(lineDiv);
+                }});
+            }} else {{
+                contextContainer.innerHTML = '<p style="color: var(--text-dim); font-style: italic;">No code context available.</p>';
+            }}
+        }}
+
+        function escapeHtml(text) {{
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }}
 
         renderIssues();

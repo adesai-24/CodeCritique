@@ -11,6 +11,24 @@ from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
 from critique.report import print_report
 
+def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> List[str]:
+    """
+    Extracts a few lines of code around the specified line number.
+    """
+    if not os.path.exists(file_path):
+        return []
+    
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        start = max(0, line - context_lines - 1)
+        end = min(len(lines), line + context_lines)
+        
+        return lines[start:end]
+    except Exception:
+        return []
+
 console = Console()
 
 def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> bool:
@@ -62,7 +80,13 @@ def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> 
             task = progress.add_task(description=f"Running {checker.name}...", total=None)
             
             new_issues = checker.run(files)
-            all_issues.extend(new_issues)
+            
+            enriched_issues = []
+            for issue in new_issues:
+                context = extract_code_context(issue.file_path, issue.line)
+                enriched_issues.append(issue._replace(code_context=context))
+            
+            all_issues.extend(enriched_issues)
             
             progress.remove_task(task)
 

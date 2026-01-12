@@ -13,7 +13,6 @@ class MypyChecker(BaseChecker):
         
         issues = []
         try:
-            # mypy --show-column-numbers --no-error-summary file1 file2 ...
             cmd = ["mypy", "--show-column-numbers", "--no-error-summary"] + files
             result = subprocess.run(cmd, capture_output=True, text=True)
             
@@ -34,7 +33,7 @@ class MypyChecker(BaseChecker):
                         column=int(col),
                         message=msg.strip(),
                         code="TYPE",
-                        severity=Severity.FATAL, # Type errors are usually fatal in strict mode
+                        severity=Severity.FATAL,
                         reasoning="Type mismatch found."
                     ))
                     
