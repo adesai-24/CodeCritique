@@ -95,6 +95,14 @@ def generate_html_report(issues: List[Issue]) -> str:
             "context_start_line": max(1, i.line - 3)
         })
 
+    # Stats for Dashboard
+    stats = {
+        "total": len(issues),
+        "fatal": len([i for i in issues if i.severity == Severity.FATAL]),
+        "warning": len([i for i in issues if i.severity == Severity.WARNING]),
+        "info": len([i for i in issues if i.severity == Severity.INFO]),
+    }
+
     html_template = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -138,12 +146,12 @@ def generate_html_report(issues: List[Issue]) -> str:
 
         /* Sidebar */
         .sidebar {{
-            width: 350px;
+            width: 380px;
             background: var(--sidebar-bg);
             border-right: 1px solid var(--glass-border);
             display: flex;
             flex-direction: column;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(20px);
         }}
 
         .sidebar-header {{
@@ -214,15 +222,103 @@ def generate_html_report(issues: List[Issue]) -> str:
             font-family: var(--font-mono);
         }}
 
+        /* Grouping */
+        .file-group {{
+            margin-bottom: 2rem;
+        }}
+
+        .file-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.5rem 0.5rem 0;
+            border-bottom: 1px solid var(--glass-border);
+            margin-bottom: 1rem;
+            cursor: pointer;
+            user-select: none;
+        }}
+
+        .file-header:hover {{
+            color: var(--accent-blue);
+        }}
+
+        .file-header h2 {{
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+        }}
+
+        .file-header .count {{
+            font-size: 0.7rem;
+            background: var(--card-bg);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }}
+
+        .chevron {{
+            transition: transform 0.2s ease;
+            margin-right: 8px;
+            font-size: 0.8rem;
+        }}
+
+        .collapsed .chevron {{
+            transform: rotate(-90deg);
+        }}
+
+        .collapsed .group-content {{
+            display: none;
+        }}
+
         /* Main Content */
         .main-content {{
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.05), transparent);
-            padding: 3rem;
+            background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent);
+            padding: 2rem 4rem;
             overflow-y: auto;
         }}
+
+        /* Dashboard */
+        .dashboard {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }}
+
+        .summary-card {{
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: 16px;
+            text-align: center;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }}
+
+        .summary-card:hover {{
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+        }}
+
+        .summary-card h3 {{
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }}
+
+        .summary-card .value {{
+            font-size: 2rem;
+            font-weight: 700;
+        }}
+
+        .card-total .value {{ color: var(--text-color); }}
+        .card-fatal .value {{ color: var(--fatal-red); }}
+        .card-warning .value {{ color: var(--warning-yellow); }}
+        .card-info .value {{ color: var(--info-blue); }}
 
         .empty-state {{
             display: flex;
@@ -375,7 +471,26 @@ def generate_html_report(issues: List[Issue]) -> str:
         </div>
     </div>
     <main class="main-content" id="mainContent">
-        <div class="empty-state" id="emptyState">
+        <div class="dashboard" id="dashboard">
+            <div class="summary-card card-total">
+                <h3>Total Issues</h3>
+                <div class="value">{stats['total']}</div>
+            </div>
+            <div class="summary-card card-fatal">
+                <h3>Fatal</h3>
+                <div class="value">{stats['fatal']}</div>
+            </div>
+            <div class="summary-card card-warning">
+                <h3>Warnings</h3>
+                <div class="value">{stats['warning']}</div>
+            </div>
+            <div class="summary-card card-info">
+                <h3>Info</h3>
+                <div class="value">{stats['info']}</div>
+            </div>
+        </div>
+
+        <div class="empty-state" id="emptyState" style="display: {'none' if issues else 'flex'}">
             <h2>{ "No Issues Found!" if not issues else "Select an issue to see details" }</h2>
             <p>{ "Your code is shining bright." if not issues else "Choose from the list on the left." }</p>
         </div>
@@ -416,16 +531,49 @@ def generate_html_report(issues: List[Issue]) -> str:
         function renderIssues() {{
             if (issues.length === 0) return;
 
+            // Grouping by file
+            const groups = {{}};
             issues.forEach((issue, index) => {{
-                const item = document.createElement('div');
-                item.className = 'issue-item';
-                item.innerHTML = `
-                    <div class="severity-indicator sev-${{issue.severity.toLowerCase()}}"></div>
-                    <h3>${{issue.message}}</h3>
-                    <p>${{issue.file.split(/[\\\\/]/).pop()}}:${{issue.line}}</p>
+                if (!groups[issue.file]) groups[issue.file] = [];
+                groups[issue.file].push({{...issue, index}});
+            }});
+
+            Object.keys(groups).forEach(file => {{
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'file-group';
+                
+                const header = document.createElement('div');
+                header.className = 'file-header';
+                header.innerHTML = `
+                    <div style="display: flex; align-items: center;">
+                        <span class="chevron">▼</span>
+                        <h2>${{file.split(/[\\\\/]/).pop()}}</h2>
+                    </div>
+                    <span class="count">${{groups[file].length}}</span>
                 `;
-                item.onclick = () => showIssue(index, item);
-                issueList.appendChild(item);
+                header.onclick = () => groupDiv.classList.toggle('collapsed');
+                
+                const content = document.createElement('div');
+                content.className = 'group-content';
+                
+                groups[file].forEach(issue => {{
+                    const item = document.createElement('div');
+                    item.className = 'issue-item';
+                    item.innerHTML = `
+                        <div class="severity-indicator sev-${{issue.severity.toLowerCase()}}"></div>
+                        <h3>${{issue.message}}</h3>
+                        <p>Line ${{issue.line}}</p>
+                    `;
+                    item.onclick = (e) => {{
+                        e.stopPropagation();
+                        showIssue(issue.index, item);
+                    }};
+                    content.appendChild(item);
+                }});
+                
+                groupDiv.appendChild(header);
+                groupDiv.appendChild(content);
+                issueList.appendChild(groupDiv);
             }});
         }}
 
