@@ -31,10 +31,9 @@ def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> L
 
 console = Console()
 
-def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> bool:
+def get_target_files(incremental: bool = True, custom_files: List[str] = None) -> List[str]:
     """
-    Orchestrates the execution of all enabled checkers.
-    Returns True if execution flows allow a push (Pass or Warnings only), False if Fatal.
+    Determines which files to check based on flags.
     """
     import sys
     import os
@@ -45,22 +44,27 @@ def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> 
     if custom_files:
         files = [os.path.abspath(f) for f in custom_files]
         console.print(f"[bold blue]Checking {len(files)} target file(s)...[/bold blue]")
-    elif incremental:
+        return files
+        
+    if incremental:
         files = get_changed_files()
         if not files:
             console.print("[bold green]No python files changed. Skipping checks.[/bold green]")
-            return True
+            return []
         console.print(f"[bold blue]Checking {len(files)} changed file(s)...[/bold blue]")
-    else:
-        import glob
-        files = glob.glob("**/*.py", recursive=True)
-        files = [f for f in files if "site-packages" not in f and "venv" not in f and ".venv" not in f]
-        files = [os.path.abspath(f) for f in files]
+        return files
+    
+    import glob
+    files = glob.glob("**/*.py", recursive=True)
+    files = [f for f in files if "site-packages" not in f and "venv" not in f and ".venv" not in f]
+    return [os.path.abspath(f) for f in files]
 
-        if not files:
-             console.print("[yellow]No python files found.[/yellow]")
-             return True
-        console.print(f"[bold blue]Full scan: Checking {len(files)} file(s)...[/bold blue]")
+def scan_files(files: List[str]) -> List[Issue]:
+    """
+    Runs all configured checkers on the provided files.
+    """
+    if not files:
+        return []
 
     checkers = [
         RuffChecker(),
@@ -89,5 +93,21 @@ def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> 
             all_issues.extend(enriched_issues)
             
             progress.remove_task(task)
+            
+    return all_issues
 
+def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> bool:
+    """
+    Orchestrates the execution of all enabled checkers.
+    Returns True if execution flows allow a push (Pass or Warnings only), False if Fatal.
+    """
+    files = get_target_files(incremental, custom_files)
+    if not files and incremental and not custom_files:
+        return True 
+        
+    if not files and not incremental:
+         console.print("[yellow]No python files found.[/yellow]")
+         return True
+
+    all_issues = scan_files(files)
     return print_report(all_issues)
