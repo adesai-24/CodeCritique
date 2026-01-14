@@ -1,0 +1,80 @@
+# Implementation Plan: React Desktop Application
+
+This plan outlines the architecture for a robust, standalone desktop application using **React** for the frontend and **Python (CodeCritique)** for the backend, bridged by **pywebview**. This setup allows for complex future interactions (state management, multiple views, rich forms) while keeping the application lightweight and focused.
+
+## Goal
+Build a standalone desktop application ("CodeCritique App") that runs alongside your editor. It provides a rich, responsive interface for analyzing code, capable of handling complex interactions beyond a simple list view.
+
+## Technology Stack
+
+### Frontend (User Interface)
+- **Framework**: **React** (v18+)
+  - *Why*: Component-based architecture allows for complex state (filters, sorting, detail views, settings) and easier expansion for future features compared to vanilla HTML/JS.
+- **Build Tool**: **Vite**
+  - *Why*: Extremely fast development server and optimized builds.
+- **Styling**: **CSS Modules** or **Styled Components**
+  - *Why*: Scoped styling prevents conflicts and keeps the "Liquid Glass" aesthetic organized. We will port your existing beautiful CSS.
+- **Icons**: `lucide-react` (cleaner integration than script tags)
+
+### Backend (Logic & OS)
+- **Runtime**: **Python** (Existing `CodeCritique` logic)
+- **Window Manager**: **pywebview**
+  - *Why*: Creates a native window (WebView2 on Windows) without the massive bloat of Electron. It provides a simple 2-way bridge between Python and React.
+
+## User Review Required
+> [!IMPORTANT]
+> **New Tooling**: You will need `Node.js` installed to build the React frontend.
+> **Development Flow**: You will have two modes:
+> 1.  **Dev Mode**: Run React dev server (`npm run dev`) + Python script. Hot-reloading enabled.
+> 2.  **Prod Mode**: Python script serves the bundled React app.
+
+## Proposed Changes
+
+### 1. Project Dependencies
+#### [MODIFY] [pyproject.toml](file:///c:/Users/ad207/OneDrive/Documents/Programming/Personal/CodeCritique/pyproject.toml)
+- Add `pywebview` to Python dependencies.
+
+### 2. Frontend Initialization (New Sub-project)
+We will create a `web/` directory inside `src/critique` (or root) to hold the React application.
+#### [NEW] [src/web/package.json](file:///c:/Users/ad207/OneDrive/Documents/Programming/Personal/CodeCritique/src/web/package.json)
+- Standard React + Vite setup.
+
+#### [NEW] [src/web/src/App.jsx](file:///c:/Users/ad207/OneDrive/Documents/Programming/Personal/CodeCritique/src/web/src/App.jsx)
+- The main entry point. It will contain the "Liquid Glass" layout ported to React components.
+
+### 3. Python <-> React Bridge
+#### [NEW] [src/critique/app.py](file:///c:/Users/ad207/OneDrive/Documents/Programming/Personal/CodeCritique/src/critique/app.py)
+- **Class `CodeCritiqueApi`**:
+  - `get_issues()`: Returns existing analysis data.
+  - `rescan()`: Triggers a re-run of checks and pushes new data to UI.
+  - `open_file(path)`: Opens file in editor.
+- **Bootstrapper**:
+  - Starts `pywebview`.
+  - In Dev: Points to `http://localhost:5173` (Vite).
+  - In Prod: Points to local `dist/index.html`.
+
+### 4. Integration
+#### [MODIFY] [runner.py](file:///c:/Users/ad207/OneDrive/Documents/Programming/Personal/CodeCritique/src/critique/runner.py)
+- Add a `--ui` flag or separate command to launch the App instead of printing the CLI report.
+
+## Gameplan Phases
+
+### Phase 1: Setup & Port
+1.  Initialize React project in `src/web`.
+2.  Port the existing "Liquid Glass" HTML/CSS to React Components (Sidebar, IssueCard, Dashboard).
+3.  Set up the `pywebview` window to load the React app.
+
+### Phase 2: Wiring
+1.  Connect React's state to Python's data using the `window.pywebview.api` bridge.
+2.  Implement the "Rescan" button to trigger Python logic from the UI.
+3.  Implement "Open in Editor".
+
+### Phase 3: Polish
+1.  Add auto-reloading (background watcher) if desired.
+2.  Finalize "Production" build process (bundling JS into the Python package).
+
+## Verification Plan
+1.  **Install**: `npm install` in `src/web`.
+2.  **Run Dev**: Start Vite server -> Run Python app pointing to localhost.
+3.  **Verify UI**: Ensure the port looks exactly like (or better than) the HTML report.
+4.  **Verify Interactivity**: Click "Rescan" -> Verify Python logs output -> Verify UI updates.
