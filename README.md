@@ -31,6 +31,8 @@ CodeCritique is a local development tool designed to evaluate your code before y
    ```bash
    pip install -e .
    ```
+   
+Supported Python versions: 3.8 through 3.12.
 
 ## Usage
 

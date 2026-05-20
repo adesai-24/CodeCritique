@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [
     { name = "User", email = "user@example.com" },
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.8, <3.13"
 dependencies = [
     "typer[all]",
     "rich",
@@ -20,7 +20,7 @@ dependencies = [
     "pytest",
     "pytest-cov",
     "coverage",
-    "pywebview",
+    # GUI removed: pywebview was intentionally removed from runtime deps.
 ]
 
 [project.scripts]

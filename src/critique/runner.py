@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import os
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -31,7 +31,7 @@ def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> L
 
 console = Console()
 
-def get_target_files(incremental: bool = True, custom_files: List[str] = None) -> List[str]:
+def get_target_files(incremental: bool = True, custom_files: Optional[List[str]] = None) -> List[str]:
     """
     Determines which files to check based on flags.
     """
@@ -96,7 +96,7 @@ def scan_files(files: List[str]) -> List[Issue]:
             
     return all_issues
 
-def run_all_checks(incremental: bool = True, custom_files: List[str] = None) -> bool:
+def run_all_checks(incremental: bool = True, custom_files: Optional[List[str]] = None) -> bool:
     """
     Orchestrates the execution of all enabled checkers.
     Returns True if execution flows allow a push (Pass or Warnings only), False if Fatal.
