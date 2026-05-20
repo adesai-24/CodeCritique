@@ -20,7 +20,7 @@ dependencies = [
     "pytest",
     "pytest-cov",
     "coverage",
-    # GUI removed: pywebview was intentionally removed from runtime deps.
+    "requests",
 ]
 
 [project.scripts]
