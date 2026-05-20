@@ -12,10 +12,11 @@ class Issue(NamedTuple):
     line: int
     column: int
     message: str
-    code: str  
+    code: str
     severity: Severity
     reasoning: Optional[str] = None
     code_context: Optional[List[str]] = None
+    suggested_fix: Optional[str] = None  # populated by AIEnricher (Phase 3)
 
 class BaseChecker(ABC):
     name: str = "Base"
