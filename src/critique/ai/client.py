@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5-coder:7b"
-DEFAULT_TIMEOUT = 120
+DEFAULT_TIMEOUT = 300  # qwen2.5-coder:7b can be slow on CPU; 5 min is safe
 
 
 class LLMClient:

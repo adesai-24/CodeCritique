@@ -12,7 +12,7 @@ from critique.checkers.lint import RuffChecker
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
-from critique.report import print_report
+from critique.report import print_report, print_ai_report
 
 console = Console()
 
@@ -131,14 +131,20 @@ def run_all_checks(
 
     all_issues = scan_files(files, use_ai=use_ai)
 
-    if use_ai and all_issues:
+    if use_ai:
         try:
             from critique.ai.client import LLMClient
             from critique.ai.enricher import enrich_issues
+            from critique.ai.synthesizer import AISynthesizer
             llm = LLMClient()
             if llm.is_available():
-                all_issues = enrich_issues(all_issues, llm)
+                if all_issues:
+                    all_issues = enrich_issues(all_issues, llm)
+                synth = AISynthesizer(llm).synthesize(all_issues)
+                return print_ai_report(synth, all_issues)
+            else:
+                console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
         except Exception as exc:
-            console.print(f"[yellow]AI enrichment skipped: {exc}[/yellow]")
+            console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
     return print_report(all_issues)

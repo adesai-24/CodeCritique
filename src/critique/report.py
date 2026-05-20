@@ -1,11 +1,13 @@
 import os
 import webbrowser
 import json
-from typing import List
+from typing import Any, Dict, List
 
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.text import Text
 from critique.checkers.base import Issue, Severity
 
 console = Console()
@@ -873,5 +875,110 @@ def generate_html_report(issues: List[Issue]) -> str:
     
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(html_template)
-        
+
     return report_file
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — AI-powered report renderer
+# ---------------------------------------------------------------------------
+
+def print_ai_report(synth: Dict[str, Any], issues: List[Issue]) -> bool:
+    """
+    Render a curated, senior-engineer-style code review to the terminal.
+
+    Layout:
+      1. Summary panel          — overall assessment from the synthesizer
+      2. Fix First callout      — the single highest-priority issue
+      3. Critical section       — must-fix items with code context
+      4. Warnings section       — should-fix items
+      5. Suggestions section    — nice-to-have items
+      6. What's Good panel      — positive observations (always present)
+
+    Returns True if the push should be allowed (no FATAL issues), False otherwise.
+    Uses only ASCII box-drawing characters for Windows cp1252 compatibility.
+    """
+    console.print()
+
+    # 1. Summary
+    summary = synth.get("summary", "Review complete.")
+    console.print(Panel(
+        f"[bold]{summary}[/bold]",
+        title="[cyan]CodeCritique AI Review[/cyan]",
+        border_style="cyan",
+    ))
+    console.print()
+
+    # 2. Fix First
+    fix_first_idx = synth.get("fix_first", -1)
+    if isinstance(fix_first_idx, int) and 0 <= fix_first_idx < len(issues):
+        ff = issues[fix_first_idx]
+        try:
+            ff_path = os.path.relpath(ff.file_path)
+        except Exception:
+            ff_path = ff.file_path
+        fix_text = Text()
+        fix_text.append("Fix First: ", style="bold yellow")
+        fix_text.append(f"{ff_path}:{ff.line} - {ff.message}", style="white")
+        if ff.suggested_fix:
+            fix_text.append(f"\n  -> {ff.suggested_fix}", style="dim yellow")
+        console.print(Panel(fix_text, title="[yellow]!! Priority[/yellow]", border_style="yellow"))
+        console.print()
+
+    # 3-5. Sectioned findings
+    def _render_section(title: str, indices: List[int], color: str) -> None:
+        if not indices:
+            return
+        console.print(f"[bold {color}]{'-' * 60}[/bold {color}]")
+        console.print(f"[bold {color}]  {title}[/bold {color}]")
+        console.print(f"[bold {color}]{'-' * 60}[/bold {color}]")
+        for idx in indices:
+            if idx >= len(issues):
+                continue
+            issue = issues[idx]
+            try:
+                rel_path = os.path.relpath(issue.file_path)
+            except Exception:
+                rel_path = issue.file_path
+            console.print(f"\n  [{color}]{issue.message}[/{color}]  [dim]({issue.code})[/dim]")
+            console.print(f"  [dim]{rel_path}:{issue.line}[/dim]")
+            if issue.reasoning:
+                console.print(f"  {issue.reasoning}")
+            if issue.suggested_fix:
+                console.print(f"  [dim]Fix:[/dim] [italic]{issue.suggested_fix}[/italic]")
+            if issue.code_context:
+                snippet = "".join(issue.code_context)
+                console.print(Syntax(
+                    snippet, "python",
+                    line_numbers=True,
+                    start_line=max(1, issue.line - 3),
+                    theme="monokai",
+                ))
+        console.print()
+
+    _render_section("CRITICAL - Must Fix", synth.get("critical", []), "red")
+    _render_section("WARNINGS - Should Fix", synth.get("warnings", []), "yellow")
+    _render_section("SUGGESTIONS - Nice to Have", synth.get("suggestions", []), "blue")
+
+    # 6. What's Good
+    whats_good = synth.get("whats_good", [])
+    if whats_good:
+        good_text = "\n".join(f"  + {item}" for item in whats_good)
+        console.print(Panel(good_text, title="[green]What's Good[/green]", border_style="green"))
+        console.print()
+
+    # Exit logic
+    critical_ids = synth.get("critical", [])
+    warning_ids = synth.get("warnings", [])
+    has_fatal = any(
+        issues[i].severity == Severity.FATAL
+        for i in critical_ids
+        if i < len(issues)
+    )
+
+    if has_fatal:
+        console.print(f"[bold red]BLOCKED: Fix {len(critical_ids)} critical issue(s) before pushing.[/bold red]")
+        return False
+    if warning_ids:
+        console.print(f"[bold yellow]WARNING: Found {len(warning_ids)} warning(s).[/bold yellow]")
+    return True
