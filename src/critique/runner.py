@@ -130,4 +130,15 @@ def run_all_checks(
         return True
 
     all_issues = scan_files(files, use_ai=use_ai)
+
+    if use_ai and all_issues:
+        try:
+            from critique.ai.client import LLMClient
+            from critique.ai.enricher import enrich_issues
+            llm = LLMClient()
+            if llm.is_available():
+                all_issues = enrich_issues(all_issues, llm)
+        except Exception as exc:
+            console.print(f"[yellow]AI enrichment skipped: {exc}[/yellow]")
+
     return print_report(all_issues)
