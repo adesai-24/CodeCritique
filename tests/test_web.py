@@ -15,16 +15,15 @@ if _src not in sys.path:
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "web"))
-from main import app  # noqa: E402
+import main  # noqa: E402
 
-client = TestClient(app, raise_server_exceptions=True)
+client = TestClient(main.app, raise_server_exceptions=True)
 
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """Clear the in-memory rate-limit counters before every test."""
-    from main import limiter  # noqa: E402
-    limiter._storage.reset()
+    main.limiter._storage.reset()
     yield
 
 
@@ -178,3 +177,60 @@ class TestReviewEndpoint:
         events = self._review(_CLEAN_CODE)
         status_events = [e for e in events if e["event"] == "status"]
         assert len(status_events) > 0
+
+
+# ---------------------------------------------------------------------------
+# GitHub file utilities
+# ---------------------------------------------------------------------------
+
+def test_github_blob_url_maps_to_raw_file():
+    raw_url, filename = main._github_raw_url(
+        "https://github.com/adesai-24/CodeCritique/blob/main/web/main.py"
+    )
+
+    assert raw_url == "https://raw.githubusercontent.com/adesai-24/CodeCritique/main/web/main.py"
+    assert filename == "main.py"
+
+
+def test_github_raw_url_is_accepted():
+    url = "https://raw.githubusercontent.com/adesai-24/CodeCritique/main/web/main.py"
+
+    assert main._github_raw_url(url) == (url, "main.py")
+
+
+def test_non_github_url_is_rejected():
+    with pytest.raises(ValueError, match="GitHub"):
+        main._github_raw_url("https://example.com/main.py")
+
+
+def test_fetch_github_file_rejects_large_files(monkeypatch):
+    class Response:
+        content = b"x" * (main.MAX_REMOTE_BYTES + 1)
+        headers = {"content-type": "text/plain"}
+        encoding = "utf-8"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(main.requests, "get", lambda *args, **kwargs: Response())
+
+    with pytest.raises(ValueError, match="too large"):
+        main.fetch_github_file("https://raw.githubusercontent.com/a/b/main/file.py")
+
+
+def test_fetch_github_file_returns_code(monkeypatch):
+    class Response:
+        content = b"print('hello')\n"
+        headers = {"content-type": "text/plain; charset=utf-8"}
+        encoding = "utf-8"
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(main.requests, "get", lambda *args, **kwargs: Response())
+
+    result = main.fetch_github_file("https://raw.githubusercontent.com/a/b/main/file.py")
+
+    assert result["filename"] == "file.py"
+    assert result["language"] == "python"
+    assert result["code"] == "print('hello')\n"

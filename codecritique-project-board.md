@@ -345,7 +345,7 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 - [x] Per-severity colored glow on issue card hover (bleeds from stripe)
 - [x] Live line count in Monaco footer (`python · N lines`)
 - [x] Sample dropdown with slide-in animation
-- [ ] GitHub URL input for repo/PR mode (stretch)
+- [x] GitHub URL input for single-file GitHub/raw/Gist mode (repo/PR mode remains stretch)
 - [ ] Apply-fix buttons (stretch)
 
 ### Deployment
@@ -358,8 +358,8 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 ### Demo readiness
 - [x] Sample code prefilled so click-to-demo works in 5 seconds
 - [x] AI badge shows active provider (Anthropic / Ollama / Static only)
-- [ ] Landing-page tagline + description
-- [ ] Link back to GitHub repo
+- [x] Landing-page tagline + description
+- [x] Link back to GitHub repo
 
 **Definition of done:** Public URL that runs a full review on pasted code in <30 seconds.
 
