@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Python ${{ matrix.python-version }}
@@ -25,7 +28,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install package
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev,web]"
 
       - name: Run tests
         run: pytest --cov=critique --cov-report=term-missing
