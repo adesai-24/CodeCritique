@@ -3,693 +3,807 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CodeCritique — AI Code Review</title>
+  <title>CodeCritique</title>
 
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-
-  <!-- Monaco Editor loader -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 
   <style>
-    /* ═══════════════════════════════════════════════════
-       TOKENS
-    ═══════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════ */
     :root {
-      --bg:            #06060f;
-      --glass-bg:      rgba(12, 12, 28, 0.55);
-      --glass-border:  rgba(255, 255, 255, 0.09);
-      --glass-shine:   rgba(255, 255, 255, 0.14);
-      --glass-shadow:  0 24px 60px rgba(0, 0, 0, 0.55);
-      --glass-blur:    blur(48px) saturate(200%);
+      --bg:        #07070d;
+      --surface:   rgba(255,255,255,0.028);
+      --surface-2: rgba(255,255,255,0.05);
+      --border:    rgba(255,255,255,0.07);
+      --border-hi: rgba(255,255,255,0.15);
 
-      --text:          #f0f0ff;
-      --text-2:        #8888aa;
-      --text-3:        #5a5a7a;
+      --accent:       #5b5eea;
+      --accent-dim:   rgba(91,94,234,0.15);
+      --accent-glow:  rgba(91,94,234,0.3);
 
-      --accent:        #6366f1;
-      --accent-2:      #8b5cf6;
-      --accent-glow:   rgba(99, 102, 241, 0.35);
+      --t1: rgba(255,255,255,0.92);
+      --t2: rgba(255,255,255,0.45);
+      --t3: rgba(255,255,255,0.22);
+      --t4: rgba(255,255,255,0.1);
 
-      --fatal:         #ef4444;
-      --fatal-bg:      rgba(239, 68, 68, 0.12);
-      --warning:       #f59e0b;
-      --warning-bg:    rgba(245, 158, 11, 0.12);
-      --info:          #3b82f6;
-      --info-bg:       rgba(59, 130, 246, 0.12);
-      --good:          #10b981;
-      --good-bg:       rgba(16, 185, 129, 0.12);
+      --fatal:    #f05252;
+      --warn:     #e3a008;
+      --info:     #4a8cf7;
+      --good:     #31c48d;
 
-      --radius-sm:     10px;
-      --radius:        18px;
-      --radius-lg:     28px;
-      --radius-xl:     36px;
+      --fatal-dim:  rgba(240,82,82,0.1);
+      --warn-dim:   rgba(227,160,8,0.1);
+      --info-dim:   rgba(74,140,247,0.1);
+      --good-dim:   rgba(49,196,141,0.1);
 
-      --mono:          'JetBrains Mono', monospace;
-      --sans:          'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --radius:  14px;
+      --radius-sm: 8px;
+      --radius-xs: 5px;
+
+      --font:  'Inter', -apple-system, sans-serif;
+      --mono:  'JetBrains Mono', 'Fira Code', monospace;
+
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --ease-out:    cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
-    /* ═══════════════════════════════════════════════════
+    /* ═══════════════════════════════════════════
        RESET
-    ═══════════════════════════════════════════════════ */
+    ═══════════════════════════════════════════ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
       height: 100%;
       overflow: hidden;
-      font-family: var(--sans);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.6;
       background: var(--bg);
-      color: var(--text);
+      color: var(--t1);
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* ═══════════════════════════════════════════════════
-       AURORA BACKGROUND
-    ═══════════════════════════════════════════════════ */
-    .aurora {
+    /* ═══════════════════════════════════════════
+       BACKGROUND — subtle glow + grain
+    ═══════════════════════════════════════════ */
+    body::before {
+      content: '';
       position: fixed;
       inset: 0;
       z-index: 0;
-      overflow: hidden;
       pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 55% at 15% 25%, rgba(91,94,234,0.055) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 35% at 85% 75%, rgba(91,94,234,0.03)  0%, transparent 60%);
     }
 
-    .aurora-blob {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(100px);
-      will-change: transform;
+    /* SVG noise grain overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: -50%;
+      width: 200%; height: 200%;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0.042;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+      background-size: 180px 180px;
+      animation: grain 7s steps(8, end) infinite;
     }
 
-    .blob-1 {
-      width: 700px; height: 700px;
-      background: radial-gradient(circle, rgba(79, 70, 229, 0.55) 0%, transparent 70%);
-      top: -200px; left: -150px;
-      animation: drift1 28s ease-in-out infinite;
-    }
-    .blob-2 {
-      width: 550px; height: 550px;
-      background: radial-gradient(circle, rgba(139, 92, 246, 0.45) 0%, transparent 70%);
-      bottom: -150px; right: -100px;
-      animation: drift2 24s ease-in-out infinite;
-    }
-    .blob-3 {
-      width: 400px; height: 400px;
-      background: radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, transparent 70%);
-      top: 40%; left: 55%;
-      animation: drift3 32s ease-in-out infinite;
-    }
-    .blob-4 {
-      width: 300px; height: 300px;
-      background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
-      top: 25%; right: 20%;
-      animation: drift4 20s ease-in-out infinite;
+    @keyframes grain {
+      0%  { transform: translate(0,0); }
+      12% { transform: translate(-3%,-8%); }
+      25% { transform: translate(5%,-3%); }
+      37% { transform: translate(-2%, 6%); }
+      50% { transform: translate(8%, 2%); }
+      62% { transform: translate(-4%, 9%); }
+      75% { transform: translate(2%, -5%); }
+      87% { transform: translate(-7%, 3%); }
+      100%{ transform: translate(0,0); }
     }
 
-    @keyframes drift1 {
-      0%,100% { transform: translate(0,0) scale(1); }
-      33%      { transform: translate(60px,-80px) scale(1.08); }
-      66%      { transform: translate(-40px,50px) scale(0.94); }
-    }
-    @keyframes drift2 {
-      0%,100% { transform: translate(0,0) scale(1); }
-      40%      { transform: translate(-70px,60px) scale(1.12); }
-      70%      { transform: translate(50px,-40px) scale(0.9); }
-    }
-    @keyframes drift3 {
-      0%,100% { transform: translate(0,0) scale(1); }
-      50%      { transform: translate(-60px,-60px) scale(1.15); }
-    }
-    @keyframes drift4 {
-      0%,100% { transform: translate(0,0) scale(1); }
-      45%      { transform: translate(40px,80px) scale(1.1); }
-    }
-
-    /* ═══════════════════════════════════════════════════
-       GLASS MIXIN
-    ═══════════════════════════════════════════════════ */
-    .glass {
-      background: var(--glass-bg);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border);
-      box-shadow:
-        var(--glass-shadow),
-        inset 0 1px 0 var(--glass-shine);
-    }
-
-    /* ═══════════════════════════════════════════════════
-       LAYOUT
-    ═══════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════
+       SHELL
+    ═══════════════════════════════════════════ */
     .shell {
       position: relative;
       z-index: 1;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      padding: 16px;
-      gap: 12px;
+      padding: 14px;
+      gap: 10px;
     }
 
-    /* ── Navbar ── */
-    .navbar {
-      border-radius: var(--radius-lg);
-      padding: 0 20px;
-      height: 56px;
+    /* ═══════════════════════════════════════════
+       NAV
+    ═══════════════════════════════════════════ */
+    .nav {
+      flex-shrink: 0;
+      height: 48px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-shrink: 0;
+      padding: 0 18px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      box-shadow: 0 1px 0 var(--border), inset 0 1px 0 rgba(255,255,255,0.06);
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-      color: var(--text);
+      gap: 9px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--t1);
+      letter-spacing: -0.2px;
     }
 
-    .brand-icon {
-      width: 28px; height: 28px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      border-radius: 8px;
+    .brand-mark {
+      width: 26px; height: 26px;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      border-radius: 7px;
       display: grid;
       place-items: center;
-      font-size: 14px;
-      box-shadow: 0 4px 12px var(--accent-glow);
+      font-size: 13px;
+      box-shadow: 0 0 0 1px rgba(91,94,234,0.5), 0 4px 12px rgba(91,94,234,0.35);
+      flex-shrink: 0;
     }
 
-    .nav-pills {
-      display: flex;
-      gap: 6px;
-    }
-
-    .pill {
-      padding: 6px 14px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      border: 1px solid transparent;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      background: transparent;
-      color: var(--text-2);
-    }
-
-    .pill:hover {
-      background: rgba(255,255,255,0.06);
-      color: var(--text);
-    }
-
-    .pill.active {
-      background: rgba(99, 102, 241, 0.18);
-      border-color: rgba(99, 102, 241, 0.35);
-      color: #a5b4fc;
-    }
-
-    .ai-badge {
+    .nav-center {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 5px 12px;
+      gap: 2px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
       border-radius: 999px;
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid rgba(16,185,129,0.25);
-      background: rgba(16,185,129,0.1);
-      color: #34d399;
+      padding: 3px;
     }
 
-    .ai-badge.offline {
-      border-color: rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: var(--text-3);
+    .nav-tab {
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--t2);
+      cursor: pointer;
+      transition: all 0.18s var(--ease-out);
+      background: transparent;
+      border: none;
+      font-family: var(--font);
+      letter-spacing: -0.1px;
+    }
+
+    .nav-tab:hover { color: var(--t1); }
+
+    .nav-tab.active {
+      background: rgba(255,255,255,0.09);
+      color: var(--t1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .ai-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--t3);
     }
 
     .ai-dot {
-      width: 6px; height: 6px;
+      width: 5px; height: 5px;
       border-radius: 50%;
-      background: #34d399;
+      background: var(--t4);
+      transition: all 0.3s ease;
     }
 
-    .ai-badge.offline .ai-dot {
-      background: var(--text-3);
+    .ai-status.live .ai-dot {
+      background: var(--good);
+      box-shadow: 0 0 0 3px rgba(49,196,141,0.2);
     }
 
-    /* ── Main panels ── */
+    .ai-status.live { color: var(--t2); }
+
+    /* ═══════════════════════════════════════════
+       PANELS
+    ═══════════════════════════════════════════ */
     .panels {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
       flex: 1;
       min-height: 0;
-    }
-
-    .panel {
-      border-radius: var(--radius-xl);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .panel-header {
-      padding: 16px 20px 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--glass-border);
-      flex-shrink: 0;
-    }
-
-    .panel-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-2);
-    }
-
-    .panel-body {
-      flex: 1;
-      overflow: hidden;
-      position: relative;
-    }
-
-    /* ── Editor panel ── */
-    #editor-mount {
-      width: 100%;
-      height: 100%;
-    }
-
-    .editor-footer {
-      padding: 12px 16px;
-      border-top: 1px solid var(--glass-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
 
-    .lang-badge {
-      font-size: 11px;
-      font-weight: 600;
-      font-family: var(--mono);
-      color: var(--text-3);
-    }
-
-    .btn-row {
+    .panel {
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(60px) saturate(180%);
+      -webkit-backdrop-filter: blur(60px) saturate(180%);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.02) inset,
+        0 24px 60px rgba(0,0,0,0.3);
       display: flex;
-      gap: 8px;
-      align-items: center;
+      flex-direction: column;
+      overflow: hidden;
     }
 
+    .panel-top {
+      flex-shrink: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--t3);
+    }
+
+    .panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ═══════════════════════════════════════════
+       EDITOR PANEL
+    ═══════════════════════════════════════════ */
+    .editor-body {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    #editor-mount {
+      position: absolute;
+      inset: 0;
+    }
+
+    .editor-foot {
+      flex-shrink: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 0 16px;
+      border-top: 1px solid var(--border);
+      gap: 10px;
+    }
+
+    .lang-tag {
+      font-size: 11px;
+      font-family: var(--mono);
+      font-weight: 500;
+      color: var(--t3);
+    }
+
+    .btn-row { display: flex; gap: 7px; align-items: center; }
+
+    /* Buttons */
     .btn {
-      padding: 8px 16px;
+      padding: 0 14px;
+      height: 30px;
       border-radius: 999px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
+      font-family: var(--font);
       cursor: pointer;
-      border: none;
-      transition: all 0.2s ease;
-      font-family: var(--sans);
+      border: 1px solid transparent;
+      transition: all 0.18s var(--ease-out);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+      letter-spacing: -0.1px;
     }
 
     .btn-ghost {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--glass-border);
-      color: var(--text-2);
+      background: transparent;
+      border-color: var(--border);
+      color: var(--t2);
     }
 
     .btn-ghost:hover {
-      background: rgba(255,255,255,0.1);
-      color: var(--text);
+      background: var(--surface-2);
+      border-color: var(--border-hi);
+      color: var(--t1);
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: var(--accent);
+      border-color: rgba(255,255,255,0.15);
       color: #fff;
-      box-shadow: 0 4px 20px var(--accent-glow);
-      min-width: 110px;
+      box-shadow: 0 0 0 0 var(--accent-glow), 0 2px 8px rgba(91,94,234,0.35);
+      min-width: 108px;
+      justify-content: center;
     }
 
-    .btn-primary:hover {
-      box-shadow: 0 6px 28px rgba(99,102,241,0.55);
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 16px rgba(91,94,234,0.5);
       transform: translateY(-1px);
     }
 
-    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:active:not(:disabled) { transform: translateY(0); }
 
     .btn-primary:disabled {
-      opacity: 0.5;
+      opacity: 0.65;
       cursor: not-allowed;
-      transform: none;
       box-shadow: none;
     }
 
-    /* ── Results panel ── */
+    /* Spinner */
+    .spin {
+      width: 11px; height: 11px;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: rot 0.65s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    /* Sample menu */
+    .sample-wrap { position: relative; }
+
+    .sample-drop {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 192px;
+      background: rgba(14,14,22,0.97);
+      backdrop-filter: blur(40px);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      padding: 5px;
+      z-index: 200;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+      display: none;
+      flex-direction: column;
+    }
+
+    .sample-drop.open { display: flex; }
+
+    .sample-item {
+      padding: 8px 11px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--t2);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      transition: all 0.14s;
+    }
+
+    .sample-item:hover { background: var(--surface-2); color: var(--t1); }
+
+    .sample-icon { font-size: 13px; }
+
+    /* ═══════════════════════════════════════════
+       RESULTS PANEL
+    ═══════════════════════════════════════════ */
+    .results-meta {
+      font-size: 11px;
+      color: var(--t3);
+      font-variant-numeric: tabular-nums;
+    }
+
     .results-scroll {
+      flex: 1;
       overflow-y: auto;
-      height: 100%;
+      overflow-x: hidden;
       padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 0;
     }
 
-    .results-scroll::-webkit-scrollbar { width: 4px; }
+    .results-scroll::-webkit-scrollbar { width: 3px; }
     .results-scroll::-webkit-scrollbar-track { background: transparent; }
-    .results-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
+    .results-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+    }
+    .results-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
 
-    /* ── Empty / idle state ── */
-    .idle-state {
+    /* ── Idle ── */
+    .idle {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      text-align: center;
+      gap: 12px;
       padding: 40px;
-      color: var(--text-3);
+      text-align: center;
+      color: var(--t3);
     }
 
     .idle-icon {
-      width: 56px; height: 56px;
-      border-radius: 16px;
-      background: rgba(99,102,241,0.1);
-      border: 1px solid rgba(99,102,241,0.2);
+      width: 40px; height: 40px;
+      border: 1px solid var(--border-hi);
+      border-radius: 12px;
       display: grid;
       place-items: center;
-      font-size: 24px;
+      font-size: 18px;
       margin-bottom: 4px;
+      background: var(--surface-2);
     }
 
-    .idle-state h3 {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-2);
-    }
-
-    .idle-state p {
-      font-size: 12px;
-      line-height: 1.6;
-      max-width: 240px;
-    }
+    .idle h3 { font-size: 14px; font-weight: 600; color: var(--t2); }
+    .idle p  { font-size: 12px; line-height: 1.7; max-width: 220px; }
 
     /* ── Progress ── */
-    .progress-card {
-      border-radius: var(--radius);
-      padding: 16px 20px;
-      background: rgba(99,102,241,0.08);
-      border: 1px solid rgba(99,102,241,0.2);
+    .progress-wrap {
+      padding: 4px 0 20px;
     }
 
-    .progress-label {
-      font-size: 12px;
-      font-weight: 500;
-      color: #a5b4fc;
-      margin-bottom: 10px;
+    .progress-status {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--t2);
+      margin-bottom: 14px;
     }
 
-    .spinner {
-      width: 12px; height: 12px;
-      border: 2px solid rgba(165,180,252,0.3);
-      border-top-color: #a5b4fc;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      flex-shrink: 0;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .checker-pills {
+    .checker-row {
       display: flex;
+      gap: 7px;
       flex-wrap: wrap;
-      gap: 6px;
     }
 
-    .checker-pill {
+    .checker-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       padding: 4px 10px;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 600;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text-3);
-      display: flex;
-      align-items: center;
-      gap: 5px;
+      border: 1px solid var(--border);
+      color: var(--t3);
+      background: transparent;
       transition: all 0.25s ease;
+      letter-spacing: 0.01em;
     }
 
-    .checker-pill.done {
-      background: rgba(16,185,129,0.12);
-      border-color: rgba(16,185,129,0.25);
-      color: #34d399;
+    .checker-chip.done {
+      border-color: rgba(49,196,141,0.3);
+      color: var(--good);
+      background: var(--good-dim);
     }
 
-    .checker-pill.running {
-      background: rgba(99,102,241,0.15);
-      border-color: rgba(99,102,241,0.3);
-      color: #a5b4fc;
+    .checker-chip.err {
+      opacity: 0.4;
+      text-decoration: line-through;
     }
 
-    /* ── Summary card ── */
-    .summary-card {
-      border-radius: var(--radius);
-      padding: 20px;
-      background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1));
-      border: 1px solid rgba(99,102,241,0.25);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 18px 0;
     }
 
-    .summary-top {
+    /* ── Summary ── */
+    .summary-block {
+      margin-bottom: 18px;
+      animation: fadeUp 0.45s var(--ease-out) backwards;
+    }
+
+    .summary-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 7px;
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 7px;
     }
 
-    .summary-icon {
-      font-size: 18px;
-    }
-
-    .summary-title {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #a5b4fc;
+    .summary-eyebrow::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--accent-dim);
     }
 
     .summary-text {
       font-size: 13px;
-      line-height: 1.65;
-      color: var(--text);
+      line-height: 1.7;
+      color: var(--t2);
     }
 
     /* ── Stats row ── */
     .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
+      display: flex;
+      gap: 24px;
+      margin-bottom: 20px;
+      animation: fadeUp 0.45s var(--ease-out) 0.06s backwards;
     }
 
-    .stat-chip {
-      border-radius: var(--radius-sm);
-      padding: 12px 14px;
+    .stat {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
     }
-
-    .stat-chip.fatal  { background: var(--fatal-bg);   border: 1px solid rgba(239,68,68,0.2);  }
-    .stat-chip.warn   { background: var(--warning-bg); border: 1px solid rgba(245,158,11,0.2); }
-    .stat-chip.info   { background: var(--info-bg);    border: 1px solid rgba(59,130,246,0.2); }
 
     .stat-num {
-      font-size: 22px;
+      font-size: 26px;
       font-weight: 700;
       line-height: 1;
+      letter-spacing: -0.04em;
     }
 
-    .stat-chip.fatal .stat-num  { color: var(--fatal);   }
-    .stat-chip.warn  .stat-num  { color: var(--warning); }
-    .stat-chip.info  .stat-num  { color: var(--info);    }
+    .stat-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
 
-    .stat-lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
+    .stat.fatal .stat-num { color: var(--fatal); }
+    .stat.warn  .stat-num { color: var(--warn);  }
+    .stat.info  .stat-num { color: var(--info);  }
 
-    /* ── Section headers ── */
-    .section-header {
+    .stat.fatal .stat-lbl { color: rgba(240,82,82,0.5); }
+    .stat.warn  .stat-lbl { color: rgba(227,160,8,0.5); }
+    .stat.info  .stat-lbl { color: rgba(74,140,247,0.5); }
+
+    /* ── Pass banner ── */
+    .pass-wrap {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(49,196,141,0.2);
+      background: var(--good-dim);
+      animation: fadeUp 0.45s var(--ease-out) backwards;
+    }
+
+    .pass-check {
+      width: 32px; height: 32px;
+      background: rgba(49,196,141,0.15);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .pass-wrap strong { font-size: 13px; font-weight: 600; color: var(--good); display: block; margin-bottom: 2px; }
+    .pass-wrap span   { font-size: 11.5px; color: rgba(49,196,141,0.6); }
+
+    /* ── Section label ── */
+    .section-label {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 4px 0;
+      margin-bottom: 8px;
+      margin-top: 4px;
     }
 
-    .section-dot {
-      width: 8px; height: 8px;
+    .section-label-dot {
+      width: 6px; height: 6px;
       border-radius: 50%;
       flex-shrink: 0;
     }
 
-    .section-header h4 {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .section-count {
-      margin-left: auto;
+    .section-label-text {
       font-size: 10px;
       font-weight: 700;
-      padding: 2px 7px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .section-label-count {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 7px;
       border-radius: 999px;
     }
 
-    .section-fatal   .section-dot  { background: var(--fatal);   }
-    .section-warning .section-dot  { background: var(--warning); }
-    .section-info    .section-dot  { background: var(--info);    }
-    .section-good    .section-dot  { background: var(--good);    }
+    .sl-fatal .section-label-dot  { background: var(--fatal); box-shadow: 0 0 6px rgba(240,82,82,0.5); }
+    .sl-warn  .section-label-dot  { background: var(--warn);  box-shadow: 0 0 6px rgba(227,160,8,0.5); }
+    .sl-info  .section-label-dot  { background: var(--info);  box-shadow: 0 0 6px rgba(74,140,247,0.5); }
+    .sl-good  .section-label-dot  { background: var(--good);  box-shadow: 0 0 6px rgba(49,196,141,0.5); }
 
-    .section-fatal   h4 { color: var(--fatal);   }
-    .section-warning h4 { color: var(--warning); }
-    .section-info    h4 { color: var(--info);    }
-    .section-good    h4 { color: var(--good);    }
+    .sl-fatal .section-label-text  { color: var(--fatal); }
+    .sl-warn  .section-label-text  { color: var(--warn);  }
+    .sl-info  .section-label-text  { color: var(--info);  }
+    .sl-good  .section-label-text  { color: var(--good);  }
 
-    .section-fatal   .section-count { background: var(--fatal-bg);   color: var(--fatal);   }
-    .section-warning .section-count { background: var(--warning-bg); color: var(--warning); }
-    .section-info    .section-count { background: var(--info-bg);    color: var(--info);    }
+    .sl-fatal .section-label-count { background: var(--fatal-dim); color: var(--fatal); }
+    .sl-warn  .section-label-count { background: var(--warn-dim);  color: var(--warn);  }
+    .sl-info  .section-label-count { background: var(--info-dim);  color: var(--info);  }
 
     /* ── Issue cards ── */
     .issue-card {
-      border-radius: var(--radius);
-      overflow: hidden;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      margin-bottom: 5px;
       cursor: pointer;
-      transition: all 0.2s ease;
-      border: 1px solid transparent;
+      overflow: hidden;
+      transition:
+        border-color 0.18s ease,
+        background   0.18s ease,
+        box-shadow   0.18s ease;
     }
 
-    .issue-card:hover { transform: translateY(-1px); }
+    .issue-card:last-child { margin-bottom: 0; }
 
-    .issue-card.fatal   { background: var(--fatal-bg);   border-color: rgba(239,68,68,0.2);  }
-    .issue-card.warning { background: var(--warning-bg); border-color: rgba(245,158,11,0.2); }
-    .issue-card.info    { background: var(--info-bg);    border-color: rgba(59,130,246,0.2); }
+    .issue-card:hover {
+      border-color: var(--border-hi);
+      background: rgba(255,255,255,0.02);
+    }
 
-    .issue-card:hover.fatal   { border-color: rgba(239,68,68,0.45);  box-shadow: 0 8px 24px rgba(239,68,68,0.15);  }
-    .issue-card:hover.warning { border-color: rgba(245,158,11,0.45); box-shadow: 0 8px 24px rgba(245,158,11,0.15); }
-    .issue-card:hover.info    { border-color: rgba(59,130,246,0.45); box-shadow: 0 8px 24px rgba(59,130,246,0.15); }
+    .issue-card.fatal:hover   { box-shadow: 0 4px 20px rgba(240,82,82,0.08); }
+    .issue-card.warning:hover { box-shadow: 0 4px 20px rgba(227,160,8,0.08); }
+    .issue-card.info:hover    { box-shadow: 0 4px 20px rgba(74,140,247,0.08); }
 
     .issue-main {
-      padding: 14px 16px;
       display: flex;
-      align-items: flex-start;
-      gap: 12px;
+      align-items: stretch;
+      gap: 0;
     }
 
     .issue-stripe {
-      width: 3px;
-      border-radius: 2px;
+      width: 2px;
       flex-shrink: 0;
-      align-self: stretch;
-      min-height: 36px;
+      border-radius: 0;
     }
 
-    .fatal   .issue-stripe { background: var(--fatal);   }
-    .warning .issue-stripe { background: var(--warning); }
-    .info    .issue-stripe { background: var(--info);    }
+    .fatal   .issue-stripe { background: var(--fatal); }
+    .warning .issue-stripe { background: var(--warn);  }
+    .info    .issue-stripe { background: var(--info);  }
 
-    .issue-body { flex: 1; min-width: 0; }
+    .issue-content {
+      flex: 1;
+      padding: 10px 12px;
+      min-width: 0;
+    }
 
     .issue-msg {
       font-size: 12.5px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 4px;
+      font-weight: 500;
+      color: var(--t1);
       line-height: 1.4;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .issue-meta {
+    .issue-row {
       display: flex;
+      align-items: center;
       gap: 10px;
-      font-size: 10.5px;
-      font-family: var(--mono);
-      color: var(--text-3);
     }
 
-    .issue-expand {
+    .issue-loc {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--t3);
+    }
+
+    .issue-code {
+      font-size: 10px;
+      font-family: var(--mono);
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border);
+      color: var(--t3);
+    }
+
+    .issue-toggle {
+      flex-shrink: 0;
+      width: 20px;
+      display: grid;
+      place-items: center;
+      color: var(--t4);
+      font-size: 10px;
+      transition: transform 0.2s ease, color 0.2s ease;
+      padding-right: 10px;
+      align-self: center;
+    }
+
+    .issue-card.open .issue-toggle { transform: rotate(90deg); color: var(--t2); }
+
+    /* Expandable detail */
+    .issue-detail {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.35s ease;
+      transition: max-height 0.32s var(--ease-out);
     }
 
-    .issue-expand.open { max-height: 400px; }
+    .issue-card.open .issue-detail { max-height: 360px; }
 
-    .issue-expand-inner {
-      padding: 0 16px 14px 31px;
-      border-top: 1px solid rgba(255,255,255,0.05);
-      padding-top: 12px;
+    .issue-detail-inner {
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .expand-label {
+    .detail-label {
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-3);
-      margin-bottom: 6px;
+      letter-spacing: 0.1em;
+      color: var(--t3);
+      margin-bottom: 5px;
     }
 
-    .expand-text {
+    .detail-text {
       font-size: 12px;
-      line-height: 1.6;
-      color: var(--text-2);
-      margin-bottom: 10px;
+      line-height: 1.65;
+      color: var(--t2);
     }
 
+    /* Code context */
     .code-ctx {
-      background: rgba(0,0,0,0.35);
-      border-radius: 8px;
+      border-radius: var(--radius-xs);
       overflow: hidden;
-      font-family: var(--mono);
-      font-size: 11px;
-      border: 1px solid rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
     }
 
     .code-line {
       display: flex;
-      line-height: 1.7;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.8;
     }
 
-    .code-line.highlight { background: rgba(239,68,68,0.12); }
+    .code-line.hl { background: rgba(240,82,82,0.09); }
 
-    .line-num {
-      min-width: 36px;
+    .ln {
+      min-width: 34px;
       padding: 0 8px 0 10px;
-      color: var(--text-3);
+      color: var(--t4);
       text-align: right;
+      border-right: 1px solid var(--border);
       user-select: none;
-      border-right: 1px solid rgba(255,255,255,0.05);
+      flex-shrink: 0;
     }
 
-    .line-num.hl { color: var(--fatal); }
+    .ln.hl { color: var(--fatal); }
 
-    .line-code {
+    .lc {
       padding: 0 10px;
-      color: #c9d1d9;
-      white-space: pre;
+      color: rgba(255,255,255,0.65);
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: pre;
     }
 
     /* ── What's Good ── */
@@ -704,174 +818,105 @@
       align-items: flex-start;
       gap: 8px;
       font-size: 12px;
-      color: #34d399;
+      color: rgba(49,196,141,0.75);
       line-height: 1.5;
     }
 
-    .good-bullet {
+    .good-check {
       flex-shrink: 0;
-      width: 16px; height: 16px;
-      background: var(--good-bg);
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      font-size: 9px;
       margin-top: 1px;
+      font-size: 11px;
+      color: var(--good);
     }
-
-    /* ── Pass banner ── */
-    .pass-banner {
-      border-radius: var(--radius);
-      padding: 20px;
-      background: var(--good-bg);
-      border: 1px solid rgba(16,185,129,0.25);
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .pass-icon {
-      width: 40px; height: 40px;
-      background: rgba(16,185,129,0.15);
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      font-size: 20px;
-      flex-shrink: 0;
-    }
-
-    .pass-banner h4 { font-size: 14px; font-weight: 700; color: #34d399; margin-bottom: 2px; }
-    .pass-banner p  { font-size: 12px; color: var(--good); opacity: 0.8; }
 
     /* ── Animations ── */
-    .fade-in { animation: fadeIn 0.35s ease forwards; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
 
-    @keyframes fadeIn {
+    @keyframes cardIn {
       from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
+      to   { opacity: 1; transform: translateY(0);   }
     }
 
-    /* ── Sample code picker ── */
-    .sample-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      background: rgba(18,18,32,0.97);
-      backdrop-filter: blur(40px);
-      border: 1px solid var(--glass-border);
-      border-radius: var(--radius);
-      padding: 6px;
-      display: none;
-      flex-direction: column;
-      gap: 2px;
-      z-index: 100;
-      min-width: 200px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    .card-anim {
+      animation: cardIn 0.38s var(--ease-out) backwards;
     }
 
-    .sample-menu.open { display: flex; }
-
-    .sample-opt {
-      padding: 9px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      cursor: pointer;
-      color: var(--text-2);
-      transition: all 0.15s;
-    }
-
-    .sample-opt:hover { background: rgba(255,255,255,0.06); color: var(--text); }
-
-    .sample-wrap { position: relative; }
-
-    /* scrollbar for monaco */
-    .monaco-editor .scrollbar { opacity: 0.3; }
-    .monaco-editor .scrollbar:hover { opacity: 1; }
+    /* ═══════════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════════ */
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
   </style>
 </head>
 <body>
 
-<!-- ───────── Aurora background ───────── -->
-<div class="aurora" aria-hidden="true">
-  <div class="aurora-blob blob-1"></div>
-  <div class="aurora-blob blob-2"></div>
-  <div class="aurora-blob blob-3"></div>
-  <div class="aurora-blob blob-4"></div>
-</div>
-
-<!-- ───────── App shell ───────── -->
 <div class="shell">
 
-  <!-- Navbar -->
-  <nav class="navbar glass">
+  <!-- ─── Nav ─── -->
+  <nav class="nav">
     <div class="brand">
-      <div class="brand-icon">⚡</div>
+      <div class="brand-mark">⚡</div>
       CodeCritique
     </div>
 
-    <div class="nav-pills">
-      <button class="pill active" onclick="setMode('paste')">Paste Code</button>
-      <button class="pill" onclick="window.open('https://github.com','_blank')">GitHub</button>
+    <div class="nav-center">
+      <button class="nav-tab active" onclick="setTab(this)">Paste Code</button>
+      <button class="nav-tab" onclick="setTab(this)">GitHub</button>
     </div>
 
-    <div id="ai-badge" class="ai-badge offline">
+    <div class="ai-status" id="ai-status">
       <div class="ai-dot"></div>
-      <span id="ai-label">Checking AI…</span>
+      <span id="ai-label">—</span>
     </div>
   </nav>
 
-  <!-- Panels -->
+  <!-- ─── Panels ─── -->
   <div class="panels">
 
-    <!-- ──── LEFT: Editor ──── -->
-    <div class="panel glass" style="display:flex;flex-direction:column;">
-      <div class="panel-header">
-        <span class="panel-title">Code</span>
-        <div class="btn-row">
+    <!-- ── Editor ── -->
+    <div class="panel">
+      <div class="panel-top">
+        <span class="panel-label">Editor</span>
+        <div class="panel-actions">
           <div class="sample-wrap">
-            <button class="btn btn-ghost" id="sampleBtn" onclick="toggleSamples()">Samples ▾</button>
-            <div class="sample-menu" id="sampleMenu">
-              <div class="sample-opt" onclick="loadSample('clean')">✅ Clean code</div>
-              <div class="sample-opt" onclick="loadSample('bugs')">🐛 Logic bugs</div>
-              <div class="sample-opt" onclick="loadSample('security')">🔐 Security issues</div>
-              <div class="sample-opt" onclick="loadSample('types')">🔍 Type errors</div>
+            <button class="btn btn-ghost" onclick="toggleSamples(event)">Samples ▾</button>
+            <div class="sample-drop" id="sampleDrop">
+              <div class="sample-item" onclick="loadSample('clean')"><span class="sample-icon">✓</span> Clean code</div>
+              <div class="sample-item" onclick="loadSample('bugs')"><span class="sample-icon">⚑</span> Logic bugs</div>
+              <div class="sample-item" onclick="loadSample('security')"><span class="sample-icon">⛔</span> Security issues</div>
+              <div class="sample-item" onclick="loadSample('types')"><span class="sample-icon">◈</span> Type errors</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="panel-body">
+      <div class="editor-body">
         <div id="editor-mount"></div>
       </div>
 
-      <div class="editor-footer">
-        <span class="lang-badge">Python 3</span>
+      <div class="editor-foot">
+        <span class="lang-tag">python</span>
         <div class="btn-row">
           <button class="btn btn-ghost" onclick="clearEditor()">Clear</button>
-          <button class="btn btn-primary" id="runBtn" onclick="runReview()">
-            Run Review
-          </button>
+          <button class="btn btn-primary" id="runBtn" onclick="runReview()">Run Review</button>
         </div>
       </div>
     </div>
 
-    <!-- ──── RIGHT: Results ──── -->
-    <div class="panel glass" style="display:flex;flex-direction:column;">
-      <div class="panel-header">
-        <span class="panel-title">Review</span>
-        <span id="result-meta" style="font-size:11px;color:var(--text-3);"></span>
+    <!-- ── Results ── -->
+    <div class="panel">
+      <div class="panel-top">
+        <span class="panel-label">Review</span>
+        <span class="results-meta" id="results-meta"></span>
       </div>
 
-      <div class="panel-body">
-        <div class="results-scroll" id="results">
-
-          <!-- Idle state -->
-          <div class="idle-state" id="idle">
-            <div class="idle-icon">🔍</div>
-            <h3>Ready to review</h3>
-            <p>Paste your Python code in the editor and hit <strong>Run Review</strong> to get an instant analysis.</p>
-          </div>
-
+      <div class="results-scroll" id="results">
+        <div class="idle">
+          <div class="idle-icon">◎</div>
+          <h3>Ready to review</h3>
+          <p>Paste your Python code and press <strong>Run Review</strong> to start.</p>
         </div>
       </div>
     </div>
@@ -879,11 +924,12 @@
   </div>
 </div>
 
-<!-- ───────── App logic + Monaco setup ───────── -->
+<!-- ═══════════════════════════════════════════
+     SAMPLE CODE
+═══════════════════════════════════════════ -->
 <script>
-// ── Sample snippets (defined first — referenced by Monaco init below) ────────
-var SAMPLE_CODE = {
-  clean: `"""A well-written utility module."""
+var SAMPLES = {
+  clean: `"""A clean, well-structured utility module."""
 from typing import List
 
 
@@ -907,12 +953,12 @@ def chunk_list(items: list, size: int) -> List[list]:
     return [items[i:i + size] for i in range(0, len(items), size)]
 `,
 
-  bugs: `"""Module with common logic bugs for demonstration."""
+  bugs: `"""Module with common logic bugs."""
 import os
 
 
 def find_max(numbers):
-    # BUG: initialises max to 0 — breaks for all-negative lists
+    # BUG: initialises to 0 — wrong for all-negative lists
     max_val = 0
     for n in numbers:
         if n > max_val:
@@ -922,7 +968,7 @@ def find_max(numbers):
 
 def count_words(text):
     words = text.split(" ")
-    # BUG: off-by-one — misses the last word
+    # BUG: off-by-one — last word never counted
     count = 0
     for i in range(len(words) - 1):
         count += 1
@@ -930,7 +976,7 @@ def count_words(text):
 
 
 def get_config():
-    # BUG: hardcoded secret
+    # BUG: hardcoded credential
     API_KEY = "sk-prod-abc123supersecretkey"
     db_host = os.getenv("DB_HOST", "localhost")
     return {"key": API_KEY, "host": db_host}
@@ -962,12 +1008,12 @@ def get_user(username):
 
 
 def save_password(username, password):
-    # BAD: storing plaintext password
+    # Plaintext password storage
     with open("passwords.txt", "a") as f:
         f.write(f"{username}:{password}\\n")
 
 
-SECRET_TOKEN = "ghp_realtoken1234567890abcdef"  # hardcoded secret
+SECRET_TOKEN = "ghp_realtoken1234567890abcdef"
 `,
 
   types: `"""Type annotation problems."""
@@ -975,18 +1021,17 @@ from typing import Optional
 
 
 def greet(name):
-    return "Hello, " + name  # str + Any — mypy warning
+    return "Hello, " + name
 
 
 def parse_age(value) -> int:
-    # returns str or int depending on input — inconsistent
     if isinstance(value, str) and value.isdigit():
         return int(value)
     return value  # type: ignore
 
 
 def concat(a: str, b: int) -> str:
-    # BUG: concatenating str + int without conversion
+    # BUG: str + int — no conversion
     return a + b
 
 
@@ -994,141 +1039,137 @@ class Config:
     port: int
 
     def __init__(self):
-        self.port = "8080"   # assigned wrong type
+        self.port = "8080"   # wrong type assigned
 `
 };
+</script>
 
-// ── State ────────────────────────────────────────────────────────────────────
-let running = false;
-let currentSource = null;
+<!-- ═══════════════════════════════════════════
+     APP LOGIC
+═══════════════════════════════════════════ -->
+<script>
+'use strict';
 
-// ── Health check ─────────────────────────────────────────────────────────────
-async function checkHealth() {
+var running = false;
+
+// ── Health check ──────────────────────────────────────────────────────────────
+(async function checkHealth() {
   try {
     const r = await fetch('/api/health');
-    const data = await r.json();
-    const badge = document.getElementById('ai-badge');
-    const label = document.getElementById('ai-label');
-    if (data.ai.anthropic) {
-      badge.className = 'ai-badge';
-      label.textContent = 'Anthropic AI';
-    } else if (data.ai.ollama) {
-      badge.className = 'ai-badge';
-      label.textContent = 'Ollama AI';
+    const d = await r.json();
+    const el = document.getElementById('ai-status');
+    const lbl = document.getElementById('ai-label');
+    if (d.ai.anthropic || d.ai.ollama) {
+      el.classList.add('live');
+      lbl.textContent = d.ai.anthropic ? 'Anthropic' : 'Ollama';
     } else {
-      badge.className = 'ai-badge offline';
-      label.textContent = 'Static only';
+      lbl.textContent = 'Static';
     }
   } catch {
-    const badge = document.getElementById('ai-badge');
-    badge.className = 'ai-badge offline';
     document.getElementById('ai-label').textContent = 'Offline';
   }
-}
+})();
 
-checkHealth();
-
-// ── Editor helpers ────────────────────────────────────────────────────────────
+// ── Editor helpers ─────────────────────────────────────────────────────────────
 function clearEditor() {
-  monacoEditor?.setValue('');
+  window._editor?.setValue('');
   resetResults();
 }
 
 function loadSample(key) {
-  monacoEditor?.setValue(SAMPLE_CODE[key] || '');
+  window._editor?.setValue(SAMPLES[key] || '');
   closeSamples();
   resetResults();
 }
 
-function toggleSamples() {
-  document.getElementById('sampleMenu').classList.toggle('open');
+function toggleSamples(e) {
+  e.stopPropagation();
+  document.getElementById('sampleDrop').classList.toggle('open');
 }
 
 function closeSamples() {
-  document.getElementById('sampleMenu').classList.remove('open');
+  document.getElementById('sampleDrop').classList.remove('open');
 }
 
-document.addEventListener('click', e => {
-  if (!e.target.closest('.sample-wrap')) closeSamples();
-});
+document.addEventListener('click', closeSamples);
 
-function setMode(mode) {
-  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
+function setTab(el) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
 }
 
 // ── Results helpers ───────────────────────────────────────────────────────────
 function resetResults() {
-  const r = document.getElementById('results');
-  r.innerHTML = `
-    <div class="idle-state" id="idle">
-      <div class="idle-icon">🔍</div>
-      <h3>Ready to review</h3>
-      <p>Paste your Python code and hit <strong>Run Review</strong>.</p>
-    </div>`;
-  document.getElementById('result-meta').textContent = '';
+  document.getElementById('results').innerHTML =
+    '<div class="idle"><div class="idle-icon">◎</div><h3>Ready to review</h3><p>Paste your Python code and press <strong>Run Review</strong> to start.</p></div>';
+  document.getElementById('results-meta').textContent = '';
 }
 
-function el(tag, cls, html) {
+function mk(tag, cls) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
-  if (html) e.innerHTML = html;
   return e;
 }
 
-// ── Main review flow ──────────────────────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+// ── Review runner ─────────────────────────────────────────────────────────────
 async function runReview() {
-  if (running || !monacoEditor) return;
-  const code = monacoEditor.getValue().trim();
+  if (running || !window._editor) return;
+  const code = window._editor.getValue().trim();
   if (!code) return;
 
   running = true;
-  document.getElementById('runBtn').disabled = true;
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  runBtn.innerHTML = '<span class="spin"></span>Reviewing…';
 
-  // ── Build progress UI ────────────────────────────────────────────────
+  // ── Build progress UI ──────────────────────────────────────────────────
   const results = document.getElementById('results');
   results.innerHTML = '';
 
+  const progWrap = mk('div', 'progress-wrap');
+  const progStatus = mk('div', 'progress-status');
+  const spin = mk('span', 'spin');
+  const statusTxt = document.createTextNode('Starting analysis…');
+  progStatus.appendChild(spin);
+  progStatus.appendChild(statusTxt);
+
+  const checkerRow = mk('div', 'checker-row');
   const checkerNames = ['Lint (Ruff)', 'Security (Bandit)', 'Types (Mypy)'];
-  const pillEls = {};
-
-  const prog = el('div', 'progress-card fade-in');
-  const lbl  = el('div', 'progress-label');
-  const spin = el('div', 'spinner');
-  const ltxt = document.createElement('span');
-  ltxt.textContent = 'Starting analysis…';
-  lbl.appendChild(spin); lbl.appendChild(ltxt);
-
-  const pillsRow = el('div', 'checker-pills');
+  const chips = {};
   checkerNames.forEach(n => {
-    const p = el('span', 'checker-pill', n);
-    pillEls[n] = p;
-    pillsRow.appendChild(p);
+    const c = mk('span', 'checker-chip');
+    c.textContent = n;
+    chips[n] = c;
+    checkerRow.appendChild(c);
   });
 
-  prog.appendChild(lbl);
-  prog.appendChild(pillsRow);
-  results.appendChild(prog);
+  progWrap.appendChild(progStatus);
+  progWrap.appendChild(checkerRow);
+  results.appendChild(progWrap);
 
-  // ── State accumulated during streaming ────────────────────────────────
+  // ── SSE stream ────────────────────────────────────────────────────────
   let issuesData  = [];
   let synthData   = null;
   let completeData = null;
 
-  // ── Single SSE fetch (EventSource doesn't support POST) ───────────────
   try {
-    const response = await fetch('/api/review', {
+    const resp = await fetch('/api/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, filename: 'main.py', language: 'python' }),
     });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const reader = response.body.getReader();
-    const dec    = new TextDecoder();
-    let buf      = '';
-    let evtType  = 'message';
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', evtType = 'message';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1136,7 +1177,7 @@ async function runReview() {
       buf += dec.decode(value, { stream: true });
 
       const lines = buf.split('\n');
-      buf = lines.pop(); // hold incomplete line
+      buf = lines.pop();
 
       for (const line of lines) {
         if (line.startsWith('event:')) {
@@ -1144,280 +1185,300 @@ async function runReview() {
         } else if (line.startsWith('data:')) {
           let data;
           try { data = JSON.parse(line.slice(5).trim()); } catch { continue; }
-
-          switch (evtType) {
-            case 'status':
-              ltxt.textContent = data.message;
-              break;
-            case 'checker_done': {
-              const p = pillEls[data.checker];
-              if (p) { p.className = 'checker-pill done'; p.textContent = `✓ ${data.checker}`; }
-              break;
-            }
-            case 'checker_error': {
-              const p = pillEls[data.checker];
-              if (p) { p.style.opacity = '0.35'; p.textContent = `✗ ${data.checker}`; }
-              break;
-            }
-            case 'issues':
-              issuesData = data;
-              break;
-            case 'synthesis':
-              synthData = data;
-              ltxt.textContent = 'AI synthesis complete ✓';
-              break;
-            case 'complete':
-              completeData = data;
-              break;
-            case 'ai_error':
-              ltxt.textContent = 'Static analysis complete (no AI)';
-              break;
-          }
+          handleEvent(evtType, data);
           evtType = 'message';
         }
       }
     }
   } catch (err) {
-    ltxt.textContent = `Error: ${err.message}`;
+    progStatus.textContent = 'Error: ' + err.message;
     running = false;
-    document.getElementById('runBtn').disabled = false;
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run Review';
     return;
   }
 
-  // ── Render final report ───────────────────────────────────────────────
+  // ── Render report ─────────────────────────────────────────────────────
   results.innerHTML = '';
-  renderReport(results, issuesData, synthData, completeData);
+  renderReport(issuesData, synthData, completeData);
 
   running = false;
-  document.getElementById('runBtn').disabled = false;
+  runBtn.disabled = false;
+  runBtn.textContent = 'Run Review';
+
+  // ── Event dispatcher ──────────────────────────────────────────────────
+  function handleEvent(type, data) {
+    switch (type) {
+      case 'status':
+        if (progStatus.firstChild && progStatus.firstChild.nodeType === 1) {
+          // keep spinner, update text
+          while (progStatus.childNodes.length > 1) progStatus.removeChild(progStatus.lastChild);
+          progStatus.appendChild(document.createTextNode(data.message));
+        } else {
+          progStatus.textContent = data.message;
+        }
+        break;
+      case 'checker_done': {
+        const c = chips[data.checker];
+        if (c) { c.className = 'checker-chip done'; c.textContent = '✓ ' + data.checker; }
+        break;
+      }
+      case 'checker_error': {
+        const c = chips[data.checker];
+        if (c) c.className = 'checker-chip err';
+        break;
+      }
+      case 'issues':     issuesData   = data; break;
+      case 'synthesis':  synthData    = data; break;
+      case 'complete':   completeData = data; break;
+    }
+  }
 }
 
 // ── Report renderer ───────────────────────────────────────────────────────────
-function renderReport(container, issues, synth, complete, code) {
-  const fatal = issues.filter(i => i.severity === 'FATAL');
+function renderReport(issues, synth, complete) {
+  const results = document.getElementById('results');
+
+  const fatal   = issues.filter(i => i.severity === 'FATAL');
   const warnings = issues.filter(i => i.severity === 'WARNING');
-  const infos = issues.filter(i => i.severity === 'INFO');
+  const infos   = issues.filter(i => i.severity === 'INFO');
 
   // Meta
   if (complete) {
-    document.getElementById('result-meta').textContent =
-      `${complete.total} issue${complete.total !== 1 ? 's' : ''} · ${complete.passed ? '✓ No blockers' : '⚠ Fix required'}`;
+    document.getElementById('results-meta').textContent =
+      complete.total + ' issue' + (complete.total !== 1 ? 's' : '') +
+      (complete.passed ? ' · clean' : ' · fix required');
   }
 
-  // ── AI Summary ──────────────────────────────────────────────────────
-  if (synth) {
-    const card = el('div', 'summary-card fade-in');
-    const top = el('div', 'summary-top');
-    top.innerHTML = '<span class="summary-icon">✨</span>';
-    const t = el('span', 'summary-title', 'AI Summary');
-    top.appendChild(t);
-    card.appendChild(top);
-    const txt = el('p', 'summary-text');
-    txt.textContent = synth.summary || 'Analysis complete.';
-    card.appendChild(txt);
-    container.appendChild(card);
+  // AI summary
+  if (synth?.summary) {
+    const block = mk('div', 'summary-block');
+    const eyebrow = mk('div', 'summary-eyebrow');
+    eyebrow.textContent = 'AI Summary';
+    const txt = mk('p', 'summary-text');
+    txt.textContent = synth.summary;
+    block.appendChild(eyebrow);
+    block.appendChild(txt);
+    results.appendChild(block);
   }
 
-  // ── Stats ───────────────────────────────────────────────────────────
+  // Stats
   if (issues.length > 0) {
-    const row = el('div', 'stats-row fade-in');
-    row.innerHTML = `
-      <div class="stat-chip fatal"><span class="stat-num">${fatal.length}</span><span class="stat-lbl">Fatal</span></div>
-      <div class="stat-chip warn"><span class="stat-num">${warnings.length}</span><span class="stat-lbl">Warnings</span></div>
-      <div class="stat-chip info"><span class="stat-num">${infos.length}</span><span class="stat-lbl">Info</span></div>
-    `;
-    container.appendChild(row);
-  }
-
-  // ── Pass banner ─────────────────────────────────────────────────────
-  if (issues.length === 0) {
-    const banner = el('div', 'pass-banner fade-in');
-    banner.innerHTML = `
-      <div class="pass-icon">✅</div>
-      <div>
-        <h4>All Clear!</h4>
-        <p>No issues found. Your code looks clean.</p>
-      </div>`;
-    container.appendChild(banner);
-  }
-
-  // ── Issue sections ───────────────────────────────────────────────────
-  function renderSection(title, sectionClass, items) {
-    if (!items.length) return;
-    const wrap = el('div', 'fade-in', '');
-
-    const hdr = el('div', `section-header section-${sectionClass}`);
-    hdr.innerHTML = `
-      <div class="section-dot"></div>
-      <h4>${title}</h4>
-      <span class="section-count">${items.length}</span>
-    `;
-    wrap.appendChild(hdr);
-
-    items.forEach(issue => {
-      const card = el('div', `issue-card ${issue.severity.toLowerCase()}`);
-
-      const main = el('div', 'issue-main');
-      const stripe = el('div', 'issue-stripe');
-      const body = el('div', 'issue-body');
-
-      const msg = el('div', 'issue-msg');
-      msg.textContent = issue.message;
-
-      const meta = el('div', 'issue-meta');
-      meta.innerHTML = `
-        <span>${escapeHtml(issue.file)} : ${issue.line}</span>
-        <span>${issue.code}</span>
-      `;
-
-      body.appendChild(msg);
-      body.appendChild(meta);
-      main.appendChild(stripe);
-      main.appendChild(body);
-      card.appendChild(main);
-
-      // Expandable details
-      const expand = el('div', 'issue-expand');
-      const inner = el('div', 'issue-expand-inner');
-
-      if (issue.reasoning) {
-        inner.appendChild(el('div', 'expand-label', 'Why this matters'));
-        inner.appendChild(el('div', 'expand-text', escapeHtml(issue.reasoning)));
-      }
-
-      if (issue.suggested_fix) {
-        inner.appendChild(el('div', 'expand-label', 'Suggested fix'));
-        inner.appendChild(el('div', 'expand-text', escapeHtml(issue.suggested_fix)));
-      }
-
-      if (issue.code_context && issue.code_context.length) {
-        inner.appendChild(el('div', 'expand-label', 'Code context'));
-        const codeBlock = el('div', 'code-ctx');
-        issue.code_context.forEach((line, idx) => {
-          const lineNum = (issue.context_start_line || 1) + idx;
-          const isHL = lineNum === issue.line;
-          const row = el('div', `code-line${isHL ? ' highlight' : ''}`);
-          row.innerHTML = `
-            <span class="line-num${isHL ? ' hl' : ''}">${lineNum}</span>
-            <span class="line-code">${escapeHtml(line.replace(/\n$/, ''))}</span>
-          `;
-          codeBlock.appendChild(row);
-        });
-        inner.appendChild(codeBlock);
-      }
-
-      if (!issue.reasoning && !issue.suggested_fix && !issue.code_context?.length) {
-        inner.appendChild(el('div', 'expand-text', 'No additional details available.'));
-      }
-
-      expand.appendChild(inner);
-      card.appendChild(expand);
-
-      card.addEventListener('click', () => {
-        expand.classList.toggle('open');
-      });
-
-      wrap.appendChild(card);
+    const row = mk('div', 'stats-row');
+    [['fatal', fatal.length, 'Fatal'], ['warn', warnings.length, 'Warnings'], ['info', infos.length, 'Info']].forEach(([cls, n, lbl]) => {
+      const s = mk('div', 'stat ' + cls);
+      const num = mk('div', 'stat-num');
+      num.textContent = n;
+      const l = mk('div', 'stat-lbl');
+      l.textContent = lbl;
+      s.appendChild(num);
+      s.appendChild(l);
+      row.appendChild(s);
     });
-
-    container.appendChild(wrap);
+    results.appendChild(row);
   }
 
-  renderSection('Critical — Must Fix', 'fatal', fatal);
-  renderSection('Warnings — Should Fix', 'warning', warnings);
-  renderSection('Info — Suggestions', 'info', infos);
+  // Pass
+  if (issues.length === 0) {
+    const wrap = mk('div', 'pass-wrap');
+    wrap.innerHTML = '<div class="pass-check">✓</div><div><strong>All Clear</strong><span>No issues found — code looks good.</span></div>';
+    results.appendChild(wrap);
+  }
 
-  // ── What's Good ─────────────────────────────────────────────────────
+  // Issue sections
+  function renderSection(label, cls, items, startDelay) {
+    if (!items.length) return;
+
+    const slDiv = mk('div', 'divider');
+    results.appendChild(slDiv);
+
+    const sl = mk('div', 'section-label sl-' + cls);
+    sl.innerHTML = `<div class="section-label-dot"></div>
+      <span class="section-label-text">${label}</span>
+      <span class="section-label-count">${items.length}</span>`;
+    results.appendChild(sl);
+
+    items.forEach((issue, i) => {
+      results.appendChild(makeCard(issue, startDelay + i * 42));
+    });
+  }
+
+  renderSection('Critical', 'fatal', fatal, 80);
+  renderSection('Warnings', 'warn', warnings, 80 + fatal.length * 42);
+  renderSection('Info', 'info', infos, 80 + (fatal.length + warnings.length) * 42);
+
+  // What's good
   if (synth?.whats_good?.length) {
-    const wrap = el('div', 'fade-in');
-    const hdr = el('div', 'section-header section-good');
-    hdr.innerHTML = `<div class="section-dot"></div><h4>What's Good</h4>`;
-    wrap.appendChild(hdr);
-    const list = el('div', 'good-list');
+    const d = mk('div', 'divider');
+    results.appendChild(d);
+
+    const sl = mk('div', 'section-label sl-good');
+    sl.innerHTML = '<div class="section-label-dot"></div><span class="section-label-text">What\'s Good</span>';
+    results.appendChild(sl);
+
+    const list = mk('div', 'good-list');
     synth.whats_good.forEach(item => {
-      const row = el('div', 'good-item');
-      row.innerHTML = `<span class="good-bullet">✓</span><span>${escapeHtml(item)}</span>`;
+      const row = mk('div', 'good-item');
+      row.innerHTML = '<span class="good-check">✓</span><span>' + esc(item) + '</span>';
       list.appendChild(row);
     });
-    wrap.appendChild(list);
-    container.appendChild(wrap);
+    results.appendChild(list);
   }
 }
 
-function escapeHtml(text) {
-  if (text == null) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function makeCard(issue, delayMs) {
+  const sev = issue.severity.toLowerCase() === 'fatal' ? 'fatal' : issue.severity.toLowerCase() === 'warning' ? 'warning' : 'info';
+  const card = mk('div', `issue-card ${sev} card-anim`);
+  card.style.animationDelay = delayMs + 'ms';
+
+  // Main row
+  const main = mk('div', 'issue-main');
+  const stripe = mk('div', 'issue-stripe');
+  const content = mk('div', 'issue-content');
+
+  const msg = mk('div', 'issue-msg');
+  msg.textContent = issue.message;
+
+  const row = mk('div', 'issue-row');
+  const loc = mk('span', 'issue-loc');
+  loc.textContent = esc(issue.file) + ':' + issue.line;
+  const code = mk('span', 'issue-code');
+  code.textContent = issue.code;
+  row.appendChild(loc);
+  row.appendChild(code);
+
+  content.appendChild(msg);
+  content.appendChild(row);
+
+  const toggle = mk('div', 'issue-toggle');
+  toggle.textContent = '›';
+
+  main.appendChild(stripe);
+  main.appendChild(content);
+  main.appendChild(toggle);
+
+  // Detail
+  const detail = mk('div', 'issue-detail');
+  const inner  = mk('div', 'issue-detail-inner');
+
+  if (issue.reasoning || issue.suggested_fix) {
+    if (issue.reasoning) {
+      const lbl = mk('div', 'detail-label'); lbl.textContent = 'Why';
+      const txt = mk('p', 'detail-text'); txt.textContent = issue.reasoning;
+      inner.appendChild(lbl); inner.appendChild(txt);
+    }
+    if (issue.suggested_fix) {
+      const lbl = mk('div', 'detail-label'); lbl.textContent = 'Fix';
+      const txt = mk('p', 'detail-text'); txt.textContent = issue.suggested_fix;
+      inner.appendChild(lbl); inner.appendChild(txt);
+    }
+  }
+
+  if (issue.code_context?.length) {
+    const lbl = mk('div', 'detail-label'); lbl.textContent = 'Context';
+    inner.appendChild(lbl);
+    const ctx = mk('div', 'code-ctx');
+    issue.code_context.forEach((line, idx) => {
+      const ln = (issue.context_start_line || 1) + idx;
+      const hl = ln === issue.line;
+      const row = mk('div', 'code-line' + (hl ? ' hl' : ''));
+      const lnEl = mk('span', 'ln' + (hl ? ' hl' : ''));
+      lnEl.textContent = ln;
+      const lcEl = mk('span', 'lc');
+      lcEl.textContent = (line || '').replace(/\n$/, '');
+      row.appendChild(lnEl);
+      row.appendChild(lcEl);
+      ctx.appendChild(row);
+    });
+    inner.appendChild(ctx);
+  }
+
+  if (!inner.children.length) {
+    const t = mk('p', 'detail-text'); t.textContent = 'No additional detail available.';
+    inner.appendChild(t);
+  }
+
+  detail.appendChild(inner);
+  card.appendChild(main);
+  card.appendChild(detail);
+
+  card.addEventListener('click', () => card.classList.toggle('open'));
+
+  return card;
 }
 </script>
 
-<!-- ───────── Monaco loader (after SAMPLE_CODE is defined) ───────── -->
+<!-- ═══════════════════════════════════════════
+     MONACO (loaded last so SAMPLES is defined)
+═══════════════════════════════════════════ -->
 <script>
-var monacoEditor = null;
-
 require.config({
   paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }
 });
 
 require(['vs/editor/editor.main'], function () {
-  monaco.editor.defineTheme('glass-dark', {
+  monaco.editor.defineTheme('cc-dark', {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'comment',  foreground: '636e7b', fontStyle: 'italic' },
-      { token: 'keyword',  foreground: '8b5cf6' },
-      { token: 'string',   foreground: '34d399' },
-      { token: 'number',   foreground: 'f59e0b' },
-      { token: 'type',     foreground: '6366f1' },
+      { token: 'comment',  foreground: '3d3d52', fontStyle: 'italic' },
+      { token: 'keyword',  foreground: '7c7fef' },
+      { token: 'string',   foreground: '4eb88a' },
+      { token: 'number',   foreground: 'c08b40' },
+      { token: 'type',     foreground: '6b8de3' },
+      { token: 'operator', foreground: '6b6b8a' },
     ],
     colors: {
-      'editor.background':                   '#00000000',
-      'editor.foreground':                   '#c9d1da',
-      'editorLineNumber.foreground':         '#3d3d5a',
-      'editorLineNumber.activeForeground':   '#6366f1',
-      'editor.lineHighlightBackground':      '#ffffff08',
-      'editor.selectionBackground':          '#6366f130',
-      'editor.inactiveSelectionBackground':  '#6366f118',
-      'editorCursor.foreground':             '#6366f1',
-      'scrollbar.shadow':                    '#00000000',
-      'scrollbarSlider.background':          '#ffffff14',
-      'scrollbarSlider.hoverBackground':     '#ffffff22',
-      'scrollbarSlider.activeBackground':    '#ffffff30',
-      'editorWidget.background':             '#0c0c1e',
-      'editorWidget.border':                 '#ffffff14',
+      'editor.background':                  '#07070d',
+      'editor.foreground':                  '#b8b8d0',
+      'editorLineNumber.foreground':        '#28283c',
+      'editorLineNumber.activeForeground':  '#5b5eea',
+      'editor.lineHighlightBackground':     '#ffffff06',
+      'editor.lineHighlightBorder':         '#00000000',
+      'editor.selectionBackground':         '#5b5eea22',
+      'editor.inactiveSelectionBackground': '#5b5eea12',
+      'editorCursor.foreground':            '#5b5eea',
+      'scrollbar.shadow':                   '#00000000',
+      'scrollbarSlider.background':         '#ffffff0a',
+      'scrollbarSlider.hoverBackground':    '#ffffff18',
+      'scrollbarSlider.activeBackground':   '#ffffff25',
+      'editorWidget.background':            '#0e0e18',
+      'editorWidget.border':                '#ffffff10',
+      'editorGutter.background':            '#07070d',
+      'editorIndentGuide.background':       '#1a1a28',
+      'editorIndentGuide.activeBackground': '#2a2a3a',
     }
   });
 
-  monacoEditor = monaco.editor.create(document.getElementById('editor-mount'), {
-    value: SAMPLE_CODE.security,
-    language: 'python',
-    theme: 'glass-dark',
-    fontSize: 13,
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
-    fontLigatures: true,
-    lineHeight: 22,
-    minimap: { enabled: false },
+  window._editor = monaco.editor.create(document.getElementById('editor-mount'), {
+    value:               SAMPLES.security,
+    language:            'python',
+    theme:               'cc-dark',
+    fontSize:            12.5,
+    fontFamily:          "'JetBrains Mono', 'Fira Code', monospace",
+    fontLigatures:       true,
+    lineHeight:          21,
+    letterSpacing:       0.3,
+    minimap:             { enabled: false },
     scrollBeyondLastLine: false,
-    wordWrap: 'on',
-    padding: { top: 14, bottom: 14 },
+    wordWrap:            'on',
+    padding:             { top: 16, bottom: 16 },
     renderLineHighlight: 'line',
-    smoothScrolling: true,
-    cursorBlinking: 'smooth',
+    smoothScrolling:     true,
+    cursorBlinking:      'smooth',
     cursorSmoothCaretAnimation: 'on',
-    renderWhitespace: 'selection',
-    scrollbar: {
-      vertical: 'auto',
-      horizontal: 'auto',
-      verticalScrollbarSize: 6,
-      horizontalScrollbarSize: 6,
-    },
-    overviewRulerLanes: 0,
+    renderWhitespace:    'selection',
+    overviewRulerLanes:  0,
     hideCursorInOverviewRuler: true,
     overviewRulerBorder: false,
+    scrollbar: {
+      vertical:             'auto',
+      horizontal:           'auto',
+      verticalScrollbarSize: 4,
+      horizontalScrollbarSize: 4,
+    },
+    suggest:    { showIcons: false },
+    lineNumbers: 'on',
   });
 });
 </script>
