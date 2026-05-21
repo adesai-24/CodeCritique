@@ -1,8 +1,5 @@
-# Web server dependencies — install from the repo root with:
-#   pip install -e ".[web]"
-# To enable Anthropic AI synthesis, also install the cloud extra:
-#   pip install -e ".[web,cloud]"  or  pip install anthropic>=0.40.0
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-sse-starlette>=2.1.0
+fastapi>=0.136
+uvicorn[standard]>=0.47
+sse-starlette>=2.0
 slowapi>=0.1.9
+anthropic>=0.100

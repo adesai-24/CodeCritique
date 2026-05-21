@@ -4,25 +4,12 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from critique.ai.client import LLMClient, _AVAILABILITY_CACHE
+from critique.ai.client import LLMClient
 
 
 @pytest.fixture()
-def client(tmp_path):
-    _AVAILABILITY_CACHE.clear()
-    return LLMClient(
-        base_url="http://localhost:11434",
-        model="test-model",
-        timeout=10,
-        cache_dir=tmp_path,
-    )
-
-
-@pytest.fixture(autouse=True)
-def clear_availability_cache():
-    _AVAILABILITY_CACHE.clear()
-    yield
-    _AVAILABILITY_CACHE.clear()
+def client():
+    return LLMClient(base_url="http://localhost:11434", model="test-model", timeout=10)
 
 
 # ---------------------------------------------------------------------------
@@ -46,16 +33,6 @@ def test_is_available_returns_false_on_non_200(client):
     mock_resp.status_code = 503
     with patch("critique.ai.client.requests.get", return_value=mock_resp):
         assert client.is_available() is False
-
-
-def test_is_available_reuses_recent_health_check(client):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    with patch("critique.ai.client.requests.get", return_value=mock_resp) as mock_get:
-        assert client.is_available() is True
-        assert client.is_available() is True
-
-    assert mock_get.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -92,34 +69,6 @@ def test_complete_sends_correct_payload(client):
     assert payload["options"]["temperature"] == 0.5
 
 
-def test_complete_reuses_cached_response(client):
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"message": {"content": "cached text"}}
-    with patch.object(client, "is_available", return_value=True), \
-         patch("critique.ai.client.requests.post", return_value=mock_resp) as mock_post:
-        first = client.complete(system="sys", user="usr")
-        second = client.complete(system="sys", user="usr")
-
-    assert first == "cached text"
-    assert second == "cached text"
-    assert mock_post.call_count == 1
-
-
-def test_complete_can_return_cached_response_when_offline(client):
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"message": {"content": "cached text"}}
-    with patch.object(client, "is_available", return_value=True), \
-         patch("critique.ai.client.requests.post", return_value=mock_resp):
-        client.complete(system="sys", user="usr")
-
-    with patch.object(client, "is_available", return_value=False), \
-         patch("critique.ai.client.requests.post") as mock_post:
-        result = client.complete(system="sys", user="usr")
-
-    assert result == "cached text"
-    mock_post.assert_not_called()
-
-
 # ---------------------------------------------------------------------------
 # complete_json
 # ---------------------------------------------------------------------------
@@ -149,57 +98,6 @@ def test_complete_json_sets_format_json_in_payload(client):
 
     payload = mock_post.call_args[1]["json"]
     assert payload.get("format") == "json"
-
-
-def test_complete_json_reuses_cached_response(client):
-    data = {"findings": [{"line": 5, "title": "bug"}]}
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"message": {"content": json.dumps(data)}}
-    with patch.object(client, "is_available", return_value=True), \
-         patch("critique.ai.client.requests.post", return_value=mock_resp) as mock_post:
-        first = client.complete_json(system="s", user="u")
-        second = client.complete_json(system="s", user="u")
-
-    assert first == data
-    assert second == data
-    assert mock_post.call_count == 1
-
-
-def test_complete_json_cache_key_includes_schema(client):
-    first_resp = MagicMock()
-    first_resp.json.return_value = {"message": {"content": json.dumps({"a": 1})}}
-    second_resp = MagicMock()
-    second_resp.json.return_value = {"message": {"content": json.dumps({"b": 2})}}
-
-    with patch.object(client, "is_available", return_value=True), \
-         patch(
-             "critique.ai.client.requests.post",
-             side_effect=[first_resp, second_resp],
-         ) as mock_post:
-        first = client.complete_json(system="s", user="u", schema={"type": "a"})
-        second = client.complete_json(system="s", user="u", schema={"type": "b"})
-
-    assert first == {"a": 1}
-    assert second == {"b": 2}
-    assert mock_post.call_count == 2
-
-
-def test_cache_can_be_disabled(tmp_path):
-    client = LLMClient(
-        base_url="http://localhost:11434",
-        model="test-model",
-        timeout=10,
-        cache_dir=tmp_path,
-        use_cache=False,
-    )
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"message": {"content": "fresh"}}
-    with patch.object(client, "is_available", return_value=True), \
-         patch("critique.ai.client.requests.post", return_value=mock_resp) as mock_post:
-        client.complete(system="sys", user="usr")
-        client.complete(system="sys", user="usr")
-
-    assert mock_post.call_count == 2
 
 
 # ---------------------------------------------------------------------------

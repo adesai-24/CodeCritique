@@ -1,5 +1,4 @@
 import os
-import webbrowser
 import json
 from typing import Any, Dict, List
 
@@ -66,10 +65,10 @@ def print_report(issues: List[Issue]) -> bool:
     #     pass
 
     if fatal_issues:
-        console.print(f"\n[bold red]\U0001F6AB Fix {len(fatal_issues)} FATAL issues to push.[/bold red]")
+        console.print(f"\n[bold red]BLOCKED: Fix {len(fatal_issues)} FATAL issues to push.[/bold red]")
         return False
     elif warnings:
-        console.print(f"\n[bold yellow]\U000026A0 Found {len(warnings)} WARNINGS.[/bold yellow]")
+        console.print(f"\n[bold yellow]WARNINGS: Found {len(warnings)} warning(s).[/bold yellow]")
         return True
     
     return True
