@@ -1,21 +1,30 @@
 import glob
 import os
 import sys
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from critique.git_utils import get_changed_files
-from critique.checkers.base import Issue
+from critique.checkers.base import Issue, Severity
 from critique.checkers.lint import RuffChecker
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
 from critique.report import print_report, print_ai_report
 from critique.persistence import fallback_synthesis, save_report
+from critique.config import load_config, Config
 
 console = Console()
+
+# Canonical lowercase names for each static checker.
+_CHECKER_NAMES = {
+    "ruff": RuffChecker,
+    "bandit": BanditChecker,
+    "mypy": MypyChecker,
+    "coverage": CoverageChecker,
+}
 
 
 def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> List[str]:
@@ -58,34 +67,65 @@ def get_target_files(
     return [os.path.abspath(f) for f in files]
 
 
-def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
+def _apply_severity_overrides(issues: List[Issue], overrides: dict) -> List[Issue]:
+    """Apply severity_overrides from config to the issue list."""
+    if not overrides:
+        return issues
+    result = []
+    for issue in issues:
+        override = overrides.get(issue.code)
+        if override:
+            try:
+                new_sev = Severity[override.upper()]
+                issue = issue._replace(severity=new_sev)
+            except KeyError:
+                pass  # ignore invalid severity strings
+        result.append(issue)
+    return result
+
+
+def scan_files(
+    files: List[str],
+    use_ai: bool = True,
+    skip_checkers: Optional[Set[str]] = None,
+    ai_only: bool = False,
+    config: Optional[Config] = None,
+) -> List[Issue]:
     """
     Run all configured checkers on the provided file list.
 
-    When use_ai=True, appends AICriticChecker if Ollama is reachable.
-    Degrades gracefully to static-only mode if Ollama is offline.
+    Parameters
+    ----------
+    files: list of absolute paths to check
+    use_ai: enable AI Critic when a provider is available
+    skip_checkers: lowercase checker names to omit (e.g. {"ruff", "coverage"})
+    ai_only: run ONLY the AI Critic, skip all static checkers
+    config: loaded Config object; loaded fresh when None
     """
     if not files:
         return []
 
-    checkers = [
-        RuffChecker(),
-        BanditChecker(),
-        MypyChecker(),
-        CoverageChecker(),
-    ]
+    if config is None:
+        config = load_config()
 
-    if use_ai:
+    skip = {s.lower() for s in (skip_checkers or set())} | {s.lower() for s in config.skip_checkers}
+
+    checkers = []
+    if not ai_only:
+        for name, cls in _CHECKER_NAMES.items():
+            if name not in skip:
+                checkers.append(cls())
+
+    if use_ai and "ai-critic" not in skip:
         try:
-            from critique.ai.client import LLMClient
+            from critique.ai.providers import get_llm_provider
             from critique.checkers.ai_critic import AICriticChecker
-            llm = LLMClient()
-            if llm.is_available():
-                checkers.append(AICriticChecker(llm))
+            provider = get_llm_provider(config)
+            if provider.is_available():
+                checkers.append(AICriticChecker(provider, max_file_chars=config.max_file_chars))
             else:
                 console.print(
-                    "[yellow]Ollama not reachable — skipping AI Critic. "
-                    "Start it with: ollama serve[/yellow]"
+                    "[yellow]LLM provider not reachable — skipping AI Critic.[/yellow]"
                 )
         except Exception as exc:
             console.print(f"[yellow]AI Critic unavailable: {exc}[/yellow]")
@@ -109,20 +149,25 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
             all_issues.extend(enriched)
             progress.remove_task(task)
 
-    return all_issues
+    return _apply_severity_overrides(all_issues, config.severity_overrides)
 
 
 def run_all_checks(
     incremental: bool = True,
     custom_files: Optional[List[str]] = None,
     use_ai: bool = True,
+    skip_checkers: Optional[Set[str]] = None,
+    ai_only: bool = False,
+    config: Optional[Config] = None,
 ) -> bool:
     """
     Orchestrate the full check pipeline.
 
     Returns True if the push is allowed (no FATAL issues), False otherwise.
-    Phase 4 will swap print_report() for print_ai_report() when use_ai=True.
     """
+    if config is None:
+        config = load_config()
+
     files = get_target_files(incremental, custom_files)
     if not files and incremental and not custom_files:
         return True
@@ -130,23 +175,29 @@ def run_all_checks(
         console.print("[yellow]No python files found.[/yellow]")
         return True
 
-    all_issues = scan_files(files, use_ai=use_ai)
+    all_issues = scan_files(
+        files,
+        use_ai=use_ai,
+        skip_checkers=skip_checkers,
+        ai_only=ai_only,
+        config=config,
+    )
 
     if use_ai:
         try:
-            from critique.ai.client import LLMClient
+            from critique.ai.providers import get_llm_provider
             from critique.ai.enricher import enrich_issues
             from critique.ai.synthesizer import AISynthesizer
-            llm = LLMClient()
-            if llm.is_available():
+            provider = get_llm_provider(config)
+            if provider.is_available():
                 if all_issues:
-                    all_issues = enrich_issues(all_issues, llm)
-                synth = AISynthesizer(llm).synthesize(all_issues)
+                    all_issues = enrich_issues(all_issues, provider)
+                synth = AISynthesizer(provider).synthesize(all_issues)
                 saved = save_report(synth, all_issues)
                 console.print(f"[dim]Saved review as {saved['id']}[/dim]")
                 return print_ai_report(synth, all_issues)
             else:
-                console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
+                console.print("[yellow]LLM provider not reachable — falling back to basic report.[/yellow]")
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 

@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from rich.console import Console
 from rich.table import Table
 
-from critique.ai.client import LLMClient
+from critique.config import load_config, write_starter_config, CONFIG_PATH
 from critique.runner import run_all_checks
 from critique.git_utils import install_pre_push_hook
 from critique.persistence import list_reports, load_report
@@ -17,19 +17,44 @@ console = Console()
 def check(
     files: Optional[list[str]] = typer.Argument(None, help="Specific files to check."),
     incremental: bool = typer.Option(True, help="Only check changed files (git diff)."),
-    ai: bool = typer.Option(True, help="Use AI Critic + enrichment + synthesis (requires Ollama)."),
+    ai: bool = typer.Option(True, help="Use AI Critic + enrichment + synthesis."),
+    skip: Optional[List[str]] = typer.Option(
+        None,
+        "--skip",
+        help="Skip a checker by name. Repeatable: --skip ruff --skip coverage. "
+             "Valid names: ruff, bandit, mypy, coverage, ai-critic",
+    ),
+    ai_only: bool = typer.Option(
+        False,
+        "--ai-only",
+        help="Run only the AI Critic; skip all static checkers.",
+    ),
 ):
     """
     Run all configured checks (Lint, Types, Security, AI Review).
 
-    Pass --no-ai to skip AI features and use fast static-only mode.
-    Ollama must be running for AI features: ollama serve
+    Examples:
+      critique check                          # full run
+      critique check --no-ai                  # static only
+      critique check --skip ruff --skip mypy  # skip specific checkers
+      critique check --ai-only                # AI Critic only
     """
-    success = run_all_checks(incremental=incremental, custom_files=files, use_ai=ai)
+    cfg = load_config()
+    skip_set = set(skip) if skip else set()
+
+    success = run_all_checks(
+        incremental=incremental,
+        custom_files=files,
+        use_ai=ai,
+        skip_checkers=skip_set,
+        ai_only=ai_only,
+        config=cfg,
+    )
     if not success:
         typer.echo("Checks failed. Fix the issues or use --no-verify to bypass (not recommended).")
         raise typer.Exit(code=1)
     typer.echo("All checks passed!")
+
 
 @app.command()
 def install_hooks():
@@ -37,6 +62,28 @@ def install_hooks():
     Install the pre-push hook into the .git directory.
     """
     install_pre_push_hook()
+
+
+@app.command("init-config")
+def init_config():
+    """
+    Write a starter config.toml to ~/.codecritique/config.toml.
+
+    Safe to run on an existing config — will not overwrite unless you confirm.
+    """
+    if CONFIG_PATH.exists():
+        overwrite = typer.confirm(
+            f"Config already exists at {CONFIG_PATH}. Overwrite?", default=False
+        )
+        if not overwrite:
+            console.print("[yellow]Aborted — existing config kept.[/yellow]")
+            raise typer.Exit(code=0)
+
+    write_starter_config()
+    console.print(f"[green]Config written to {CONFIG_PATH}[/green]")
+    console.print(
+        "Edit it to set your provider (ollama / anthropic / openai) and model."
+    )
 
 
 @app.command("list")
@@ -99,9 +146,20 @@ def chat(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
 
-    llm = LLMClient()
+    cfg = load_config()
+    try:
+        from critique.ai.providers import get_llm_provider
+        llm = get_llm_provider(cfg)
+    except Exception as exc:
+        console.print(f"[red]Could not initialise LLM provider: {exc}[/red]")
+        raise typer.Exit(code=1)
+
     if not llm.is_available():
-        console.print("[red]Ollama is not running. Start it with: ollama serve[/red]")
+        console.print(
+            "[red]LLM provider is not available. "
+            "For Ollama: run 'ollama serve'. "
+            "For cloud providers: check your API key.[/red]"
+        )
         raise typer.Exit(code=1)
 
     system = (

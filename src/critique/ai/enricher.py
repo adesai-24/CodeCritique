@@ -16,8 +16,9 @@ from typing import List
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
+from typing import Any
+
 from critique.checkers.base import Issue, Severity
-from critique.ai.client import LLMClient
 from critique.ai.prompts import ENRICHER_SYSTEM
 from critique.ai.schemas import ENRICHMENT_SCHEMA
 
@@ -27,7 +28,7 @@ _MAX_WORKERS = 4
 
 
 class AIEnricher:
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: Any):
         self.llm = llm
 
     def enrich(self, issue: Issue) -> Issue:
@@ -65,7 +66,7 @@ class AIEnricher:
             return issue
 
 
-def enrich_issues(issues: List[Issue], llm: LLMClient) -> List[Issue]:
+def enrich_issues(issues: List[Issue], llm: Any) -> List[Issue]:
     """
     Enrich all issues concurrently, returning results in original order.
 

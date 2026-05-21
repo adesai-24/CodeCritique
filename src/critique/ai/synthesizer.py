@@ -11,7 +11,6 @@ import os
 from typing import Any, Dict, List
 
 from critique.checkers.base import Issue, Severity
-from critique.ai.client import LLMClient
 from critique.ai.prompts import SYNTHESIZER_SYSTEM
 from critique.ai.schemas import SYNTH_SCHEMA
 
@@ -28,7 +27,7 @@ _REQUIRED_KEYS = ("summary", "fix_first", "critical", "warnings", "suggestions",
 
 
 class AISynthesizer:
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: Any):
         self.llm = llm
 
     def synthesize(self, issues: List[Issue]) -> Dict[str, Any]:

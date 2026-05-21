@@ -1,7 +1,6 @@
-from typing import List
+from typing import Any, List
 
 from critique.checkers.base import BaseChecker, Issue, Severity
-from critique.ai.client import LLMClient
 from critique.ai.prompts import CRITIC_SYSTEM
 from critique.ai.schemas import CRITIC_SCHEMA
 
@@ -10,24 +9,25 @@ MAX_FILE_CHARS = 30_000
 
 class AICriticChecker(BaseChecker):
     """
-    Semantic code review checker backed by a local LLM.
+    Semantic code review checker backed by an LLM provider.
 
     Slots into the existing checker pipeline as a peer of Ruff/Bandit/Mypy.
     Catches logic bugs, off-by-one errors, incorrect comparisons, and other
     correctness issues that require understanding intent rather than syntax.
 
     Safety properties:
-      - Skips files larger than MAX_FILE_CHARS to stay within context budget.
+      - Skips files larger than max_file_chars to stay within context budget.
       - Wraps each file in try/except so one bad file never aborts the run.
       - Maps "findings" → Issue with code="AI" so the report can distinguish
         AI findings from static-tool findings.
     """
 
     name = "AI Critic"
-    description = "Semantic review via local LLM — catches logic bugs linters miss"
+    description = "Semantic review via LLM — catches logic bugs linters miss"
 
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: Any, max_file_chars: int = MAX_FILE_CHARS):
         self.llm = llm
+        self.max_file_chars = max_file_chars
 
     def run(self, files: List[str]) -> List[Issue]:
         issues: List[Issue] = []
@@ -40,7 +40,7 @@ class AICriticChecker(BaseChecker):
             except Exception:
                 continue
 
-            if len(source) > MAX_FILE_CHARS:
+            if len(source) > self.max_file_chars:
                 continue
 
             try:

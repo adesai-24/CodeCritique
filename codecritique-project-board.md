@@ -15,7 +15,7 @@
 | 3 | ✅ Done | AI Enricher — upgrade existing findings |
 | 4 | ✅ Done | AI Synthesizer + new report renderer |
 | 5 | ✅ Done | Chat mode + report persistence |
-| 6 | ⏳ Not Started | Config system + cloud provider fallback |
+| 6 | ✅ Done | Config system + cloud provider fallback |
 | 7 | 🚧 In Progress | Test suite |
 | 8 | ⏳ Not Started | CI/CD + packaging |
 | 9 | 🚧 In Progress | Web demo / hosted version |
@@ -245,41 +245,41 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 6 — Config + Cloud Fallback ⏳
+## Phase 6 — Config + Cloud Fallback ✅
 
 > Make the tool configurable. Support cloud LLMs as a backup.
 
 **Goal:** Real users (and recruiters) can tweak behavior without editing source.
 
 ### Config file
-- [ ] Define `~/.codecritique/config.toml` schema
-  - [ ] `provider` (ollama / anthropic / openai)
-  - [ ] `model` (per provider)
-  - [ ] `ollama.base_url`
-  - [ ] `severity_overrides` (map code → severity)
-  - [ ] `skip_checkers` (list)
-  - [ ] `max_file_chars`
-- [ ] Load with `tomllib` (Python 3.11+) at startup
-- [ ] Sensible defaults if file doesn't exist
-- [ ] `critique init-config` writes a starter file
+- [x] Define `~/.codecritique/config.toml` schema
+  - [x] `provider` (ollama / anthropic / openai)
+  - [x] `model` (per provider)
+  - [x] `ollama.base_url`
+  - [x] `severity_overrides` (map code → severity)
+  - [x] `skip_checkers` (list)
+  - [x] `max_file_chars`
+- [x] Load with `tomllib` (Python 3.11+) at startup
+- [x] Sensible defaults if file doesn't exist
+- [x] `critique init-config` writes a starter file
 
 ### Provider abstraction
-- [ ] Define `LLMProvider` protocol/ABC
-- [ ] `OllamaProvider` (current `LLMClient`)
-- [ ] `AnthropicProvider` (uses `anthropic` SDK + `ANTHROPIC_API_KEY`)
-- [ ] `OpenAIProvider` (uses `openai` SDK + `OPENAI_API_KEY`)
-- [ ] Factory: `get_llm_client(config) -> LLMProvider`
-- [ ] All providers support `complete_json()` + `complete_stream()`
+- [x] Define `LLMProvider` protocol/ABC
+- [x] `OllamaProvider` (current `LLMClient`)
+- [x] `AnthropicProvider` (uses `anthropic` SDK + `ANTHROPIC_API_KEY`)
+- [x] `OpenAIProvider` (uses `openai` SDK + `OPENAI_API_KEY`)
+- [x] Factory: `get_llm_client(config) -> LLMProvider`
+- [x] All providers support `complete_json()` + `complete_stream()`
 
 ### Per-checker enable/disable
-- [ ] CLI flags: `--skip ruff --skip ai-critic` etc.
-- [ ] Config equivalent
-- [ ] `critique check --ai-only` runs only AI Critic, skips static tools
+- [x] CLI flags: `--skip ruff --skip ai-critic` etc.
+- [x] Config equivalent
+- [x] `critique check --ai-only` runs only AI Critic, skips static tools
 
 ### Cost / rate guard (for cloud providers)
-- [ ] Token counting before send (use `tiktoken` for OpenAI, anthropic SDK helper)
-- [ ] Reject if estimated cost > $0.50/run with a clear error
-- [ ] Display cost estimate per run when using cloud provider
+- [x] Token counting before send (character-based estimation, ~4 chars/token)
+- [x] Reject if estimated cost > $0.50/run with a clear error
+- [x] Display cost estimate per run when using cloud provider
 
 **Definition of done:** Switch from local to cloud with one env var or config change. Cost is visible when using cloud.
 

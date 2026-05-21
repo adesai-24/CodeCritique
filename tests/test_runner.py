@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 from critique.checkers.base import Issue, Severity
 from critique.runner import extract_code_context, get_target_files
 
@@ -6,24 +9,22 @@ def test_extract_code_context_missing_file_returns_empty():
     assert extract_code_context("does-not-exist.py", 1) == []
 
 
-def test_extract_code_context_returns_expected_lines(tmp_path):
-    file_path = tmp_path / "sample.py"
-    file_path.write_text("line1\nline2\nline3\nline4\nline5\n", encoding="utf-8")
-
-    result = extract_code_context(str(file_path), 3, context_lines=1)
-
+def test_extract_code_context_returns_expected_lines():
+    with tempfile.TemporaryDirectory() as tmp:
+        file_path = Path(tmp) / "sample.py"
+        file_path.write_text("line1\nline2\nline3\nline4\nline5\n", encoding="utf-8")
+        result = extract_code_context(str(file_path), 3, context_lines=1)
     assert result == ["line2\n", "line3\n", "line4\n"]
 
 
-def test_get_target_files_custom_files_returns_abs_paths(tmp_path):
-    file_one = tmp_path / "a.py"
-    file_two = tmp_path / "b.py"
-    file_one.write_text("x = 1\n", encoding="utf-8")
-    file_two.write_text("y = 2\n", encoding="utf-8")
-
-    result = get_target_files(custom_files=[str(file_one), str(file_two)])
-
-    assert result == [str(file_one.resolve()), str(file_two.resolve())]
+def test_get_target_files_custom_files_returns_abs_paths():
+    with tempfile.TemporaryDirectory() as tmp:
+        file_one = Path(tmp) / "a.py"
+        file_two = Path(tmp) / "b.py"
+        file_one.write_text("x = 1\n", encoding="utf-8")
+        file_two.write_text("y = 2\n", encoding="utf-8")
+        result = get_target_files(custom_files=[str(file_one), str(file_two)])
+        assert result == [str(file_one.resolve()), str(file_two.resolve())]
 
 
 def test_get_target_files_incremental_no_changes(monkeypatch):
@@ -34,34 +35,37 @@ def test_get_target_files_incremental_no_changes(monkeypatch):
     assert runner.get_target_files(incremental=True, custom_files=None) == []
 
 
-def test_scan_files_enriches_code_context(tmp_path, monkeypatch):
+def test_scan_files_enriches_code_context(monkeypatch):
     from critique import runner
 
-    file_path = tmp_path / "sample.py"
-    file_path.write_text("a = 1\nb = 2\nc = 3\n", encoding="utf-8")
+    with tempfile.TemporaryDirectory() as tmp:
+        file_path = Path(tmp) / "sample.py"
+        file_path.write_text("a = 1\nb = 2\nc = 3\n", encoding="utf-8")
 
-    class FakeChecker:
-        name = "Fake"
-        description = "Fake"
+        class FakeChecker:
+            name = "Fake"
+            description = "Fake"
 
-        def run(self, files):
-            return [
-                Issue(
-                    file_path=str(file_path),
-                    line=2,
-                    column=0,
-                    message="message",
-                    code="TST",
-                    severity=Severity.INFO,
-                )
-            ]
+            def run(self, files):
+                return [
+                    Issue(
+                        file_path=str(file_path),
+                        line=2,
+                        column=0,
+                        message="message",
+                        code="TST",
+                        severity=Severity.INFO,
+                    )
+                ]
 
-    monkeypatch.setattr(runner, "RuffChecker", FakeChecker)
-    monkeypatch.setattr(runner, "BanditChecker", FakeChecker)
-    monkeypatch.setattr(runner, "MypyChecker", FakeChecker)
-    monkeypatch.setattr(runner, "CoverageChecker", FakeChecker)
+        # scan_files uses _CHECKER_NAMES dict, so patch that
+        monkeypatch.setattr(
+            runner,
+            "_CHECKER_NAMES",
+            {"ruff": FakeChecker, "bandit": FakeChecker, "mypy": FakeChecker, "coverage": FakeChecker},
+        )
 
-    issues = runner.scan_files([str(file_path)], use_ai=False)
+        issues = runner.scan_files([str(file_path)], use_ai=False)
 
     assert len(issues) == 4
     assert all(issue.code_context for issue in issues)
@@ -89,7 +93,11 @@ def test_run_all_checks_uses_print_report(monkeypatch):
     )
 
     monkeypatch.setattr(runner, "get_target_files", lambda incremental, custom_files: ["x.py"])
-    monkeypatch.setattr(runner, "scan_files", lambda files, use_ai: [fake_issue])
+
+    def fake_scan(files, use_ai=True, skip_checkers=None, ai_only=False, config=None):
+        return [fake_issue]
+
+    monkeypatch.setattr(runner, "scan_files", fake_scan)
 
     captured = {}
 
