@@ -1,6 +1,7 @@
 import glob
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 from rich.console import Console
@@ -16,6 +17,14 @@ from critique.report import print_report, print_ai_report
 from critique.persistence import fallback_synthesis, save_report
 
 console = Console()
+_DEFAULT_CHECKER_WORKERS = 4
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
 
 
 def save_report_notice(synth: dict, issues: List[Issue]) -> None:
@@ -107,17 +116,40 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
         TextColumn("[progress.description]{task.description}"),
         transient=True,
     ) as progress:
-        for checker in checkers:
-            task = progress.add_task(
-                description=f"Running {checker.name}...", total=None
-            )
-            new_issues = checker.run(files)
-            enriched = [
+        max_workers = max(
+            1,
+            min(
+                len(checkers),
+                _env_int("CODECRITIQUE_CHECKER_WORKERS", _DEFAULT_CHECKER_WORKERS),
+            ),
+        )
+        tasks = {
+            i: progress.add_task(description=f"Running {checker.name}...", total=None)
+            for i, checker in enumerate(checkers)
+        }
+        results: List[List[Issue]] = [[] for _ in checkers]
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {
+                executor.submit(checker.run, files): i
+                for i, checker in enumerate(checkers)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as exc:
+                    console.print(
+                        f"[yellow]{checkers[idx].name} failed: {exc}[/yellow]"
+                    )
+                finally:
+                    progress.remove_task(tasks[idx])
+
+        for checker_issues in results:
+            all_issues.extend(
                 issue._replace(code_context=extract_code_context(issue.file_path, issue.line))
-                for issue in new_issues
-            ]
-            all_issues.extend(enriched)
-            progress.remove_task(task)
+                for issue in checker_issues
+            )
 
     return all_issues
 
@@ -131,7 +163,6 @@ def run_all_checks(
     Orchestrate the full check pipeline.
 
     Returns True if the push is allowed (no FATAL issues), False otherwise.
-    Phase 4 will swap print_report() for print_ai_report() when use_ai=True.
     """
     files = get_target_files(incremental, custom_files)
     if not files and incremental and not custom_files:
