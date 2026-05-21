@@ -372,13 +372,20 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ### Frontend
 - [x] Single-page app — no build step, vanilla JS + Monaco from CDN (`web/static/index.html`)
-- [x] Monaco editor (glass-dark custom theme) for paste mode
+- [x] Monaco editor (warm-gold custom theme) for paste mode
 - [x] 4 sample snippets: clean, bugs, security, type errors
 - [x] Live-streaming report display — progress pills update as checkers complete
 - [x] AI Summary card, stats chips (Fatal/Warnings/Info), section headers
 - [x] Expandable issue cards with code context and line numbers
 - [x] "What's Good" section from AI synthesis
-- [x] Glassy liquid-glass UI: aurora background, backdrop-filter blur, subtle borders
+- [x] Awwwards-inspired UI: editorial idle state, glass panels, grain overlay, ambient orb
+- [x] SVG `</>` brand mark; warm gold / amber color scheme (non-generic, editorial)
+- [x] Entry animations — nav + panels stagger in on page load
+- [x] Count-up animation on Fatal/Warning/Info stats on every review reveal
+- [x] Magnetic CTA — Run Review button follows cursor, snaps back on leave
+- [x] Per-severity colored glow on issue card hover (bleeds from stripe)
+- [x] Live line count in Monaco footer (`python · N lines`)
+- [x] Sample dropdown with slide-in animation
 - [ ] GitHub URL input for repo/PR mode (stretch)
 - [ ] Apply-fix buttons (stretch)
 
