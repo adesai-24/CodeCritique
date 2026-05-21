@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [
     { name = "User", email = "user@example.com" },
 ]
-requires-python = ">=3.8, <3.13"
+requires-python = ">=3.8"
 dependencies = [
     "typer[all]",
     "rich",
@@ -25,6 +25,11 @@ dependencies = [
 
 [project.scripts]
 critique = "critique.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 3
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/critique"]
