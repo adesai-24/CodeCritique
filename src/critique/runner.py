@@ -18,6 +18,16 @@ from critique.persistence import fallback_synthesis, save_report
 console = Console()
 
 
+def save_report_notice(synth: dict, issues: List[Issue]) -> None:
+    """Persist a review report without letting storage errors fail a check run."""
+    try:
+        saved = save_report(synth, issues)
+    except Exception as exc:
+        console.print(f"[yellow]Could not save review report: {exc}[/yellow]")
+        return
+    console.print(f"[dim]Saved review as {saved['id']}[/dim]")
+
+
 def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> List[str]:
     """Return a few lines of source around `line` for display in reports."""
     if not os.path.exists(file_path):
@@ -142,14 +152,12 @@ def run_all_checks(
                 if all_issues:
                     all_issues = enrich_issues(all_issues, llm)
                 synth = AISynthesizer(llm).synthesize(all_issues)
-                saved = save_report(synth, all_issues)
-                console.print(f"[dim]Saved review as {saved['id']}[/dim]")
+                save_report_notice(synth, all_issues)
                 return print_ai_report(synth, all_issues)
             else:
                 console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
-    saved = save_report(fallback_synthesis(all_issues), all_issues)
-    console.print(f"[dim]Saved review as {saved['id']}[/dim]")
+    save_report_notice(fallback_synthesis(all_issues), all_issues)
     return print_report(all_issues)
