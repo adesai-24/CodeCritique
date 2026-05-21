@@ -21,6 +21,10 @@ dependencies = [
     "pytest-cov",
     "coverage",
     "requests",
+    "fastapi",
+    "uvicorn[standard]",
+    "sse-starlette",
+    "slowapi",
 ]
 
 [project.scripts]

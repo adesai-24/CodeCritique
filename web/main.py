@@ -11,8 +11,10 @@ import asyncio
 import tempfile
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request
+import requests
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -53,7 +55,60 @@ class ReviewRequest(BaseModel):
     language: str = "python"
 
 
+class GitHubFileRequest(BaseModel):
+    url: str
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
+MAX_REMOTE_BYTES = 200_000
+REPO_URL = "https://github.com/adesai-24/CodeCritique"
+
+
+def _github_raw_url(url: str) -> tuple[str, str]:
+    """Return a raw download URL and filename for a supported GitHub file URL."""
+    parsed = urlparse(url.strip())
+    if parsed.scheme != "https":
+        raise ValueError("Use an https:// GitHub URL.")
+
+    host = parsed.netloc.lower()
+    path_parts = [part for part in parsed.path.split("/") if part]
+
+    if host == "raw.githubusercontent.com" and len(path_parts) >= 4:
+        return url, path_parts[-1]
+
+    if host == "gist.githubusercontent.com" and "/raw/" in parsed.path:
+        return url, path_parts[-1] if path_parts else "gist.py"
+
+    if host == "github.com" and len(path_parts) >= 5 and path_parts[2] == "blob":
+        owner, repo, _, branch = path_parts[:4]
+        file_path = "/".join(path_parts[4:])
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
+        return raw_url, path_parts[-1]
+
+    raise ValueError("Paste a GitHub file URL, raw GitHub URL, or raw Gist URL.")
+
+
+def fetch_github_file(url: str) -> dict:
+    raw_url, filename = _github_raw_url(url)
+    response = requests.get(raw_url, timeout=15)
+    response.raise_for_status()
+
+    content_type = response.headers.get("content-type", "")
+    if content_type and "text" not in content_type and "json" not in content_type:
+        raise ValueError("That URL did not return a text file.")
+
+    if len(response.content) > MAX_REMOTE_BYTES:
+        raise ValueError("That file is too large for the demo. Keep it under 200 KB.")
+
+    code = response.content.decode(response.encoding or "utf-8", errors="replace")
+    return {
+        "code": code,
+        "filename": filename or "main.py",
+        "language": "python",
+        "source_url": raw_url,
+    }
+
+
 def _issue_to_dict(issue: Issue, source_lines: list[str]) -> dict:
     start = max(0, issue.line - 4)
     end = min(len(source_lines), issue.line + 3)
@@ -152,6 +207,22 @@ async def health():
             "ollama": ollama_ok,
         },
     }
+
+
+@app.post("/api/github-file")
+@limiter.limit("20/hour")
+async def github_file(request: Request, body: GitHubFileRequest):
+    """Fetch a single GitHub-hosted source file for the paste-mode reviewer."""
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, fetch_github_file, body.url)
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 502
+        raise HTTPException(status_code=status_code, detail="GitHub file could not be fetched.") from exc
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="GitHub request failed.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/review")
