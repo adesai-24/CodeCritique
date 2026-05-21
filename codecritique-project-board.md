@@ -15,9 +15,8 @@
 | 3 | ✅ Done | AI Enricher — upgrade existing findings |
 | 4 | ✅ Done | AI Synthesizer + new report renderer |
 | 5 | ✅ Done | Chat mode + report persistence |
-| 6 | ⏳ Not Started | Config system + cloud provider fallback |
-| 7 | 🚧 In Progress | Test suite |
-| 8 | ⏳ Not Started | CI/CD + packaging |
+| 7 | ✅ Done | Test suite |
+| 8 | 🚧 In Progress | CI/CD + packaging |
 | 9 | 🚧 In Progress | Web demo / hosted version |
 | 10 | ⏳ Not Started | Docs, polish, recruiter showcase |
 
@@ -245,46 +244,6 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 6 — Config + Cloud Fallback ⏳
-
-> Make the tool configurable. Support cloud LLMs as a backup.
-
-**Goal:** Real users (and recruiters) can tweak behavior without editing source.
-
-### Config file
-- [ ] Define `~/.codecritique/config.toml` schema
-  - [ ] `provider` (ollama / anthropic / openai)
-  - [ ] `model` (per provider)
-  - [ ] `ollama.base_url`
-  - [ ] `severity_overrides` (map code → severity)
-  - [ ] `skip_checkers` (list)
-  - [ ] `max_file_chars`
-- [ ] Load with `tomllib` (Python 3.11+) at startup
-- [ ] Sensible defaults if file doesn't exist
-- [ ] `critique init-config` writes a starter file
-
-### Provider abstraction
-- [ ] Define `LLMProvider` protocol/ABC
-- [ ] `OllamaProvider` (current `LLMClient`)
-- [ ] `AnthropicProvider` (uses `anthropic` SDK + `ANTHROPIC_API_KEY`)
-- [ ] `OpenAIProvider` (uses `openai` SDK + `OPENAI_API_KEY`)
-- [ ] Factory: `get_llm_client(config) -> LLMProvider`
-- [ ] All providers support `complete_json()` + `complete_stream()`
-
-### Per-checker enable/disable
-- [ ] CLI flags: `--skip ruff --skip ai-critic` etc.
-- [ ] Config equivalent
-- [ ] `critique check --ai-only` runs only AI Critic, skips static tools
-
-### Cost / rate guard (for cloud providers)
-- [ ] Token counting before send (use `tiktoken` for OpenAI, anthropic SDK helper)
-- [ ] Reject if estimated cost > $0.50/run with a clear error
-- [ ] Display cost estimate per run when using cloud provider
-
-**Definition of done:** Switch from local to cloud with one env var or config change. Cost is visible when using cloud.
-
----
-
 ## Phase 7 — Tests 🚧
 
 > Make this robust enough that you'd actually use it in CI.
@@ -292,28 +251,28 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 **Goal:** Confidence to refactor + something to show recruiters.
 
 ### Unit tests
-- [ ] `tests/test_checkers.py` — each checker on a fixture file
+- [x] `tests/test_checkers.py` — each checker on a fixture file
 - [x] `tests/test_git_utils.py` — mock `git diff` output
-- [ ] `tests/test_ai_client.py` — mock Ollama HTTP responses
-- [ ] `tests/test_enricher.py` — mock LLM, verify fail-open behavior
-- [ ] `tests/test_synthesizer.py` — verify schema-conforming output handling
+- [x] `tests/test_ai_client.py` — mock Ollama HTTP responses
+- [x] `tests/test_enricher.py` — mock LLM, verify fail-open behavior
+- [x] `tests/test_synthesizer.py` — verify schema-conforming output handling
 - [x] `tests/test_runner.py` — end-to-end with `--no-ai` (no LLM dependency)
 
 ### Integration tests
 - [ ] `tests/integration/test_full_run.py` — runs real Ollama if available, skips if not
-- [ ] Fixture repos with known-bad code (logic bugs, security holes, type errors)
+- [x] Fixture repos with known-bad code (logic bugs, security holes, type errors)
 - [ ] Assertions on which findings AI Critic catches
 
 ### Coverage
-- [ ] `pytest --cov=critique --cov-report=html`
+- [x] `pytest --cov=critique --cov-report=html`
 - [ ] Aim for >80% on core modules (runner, checkers, ai/*)
 - [ ] Note: don't game the metric — focus tests on logic-heavy paths
 
 ### Fixtures
-- [ ] `tests/fixtures/clean_code.py` — should produce zero findings
-- [ ] `tests/fixtures/buggy_logic.py` — off-by-one, wrong operators
-- [ ] `tests/fixtures/security_holes.py` — SQL injection, hardcoded secrets
-- [ ] `tests/fixtures/type_errors.py` — Mypy bait
+- [x] `tests/fixtures/clean_code.py` — should produce zero findings
+- [x] `tests/fixtures/buggy_logic.py` — off-by-one, wrong operators
+- [x] `tests/fixtures/security_holes.py` — SQL injection, hardcoded secrets
+- [x] `tests/fixtures/type_errors.py` — Mypy bait
 
 **Definition of done:** `pytest` runs clean, coverage report exists, AI tests can be skipped when Ollama isn't running.
 
@@ -326,25 +285,25 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 **Goal:** `pip install codecritique` works, and PRs run tests automatically.
 
 ### Packaging
-- [ ] Finalize `pyproject.toml` (name, version, deps, entry points, console_scripts)
-- [ ] Entry point: `codecritique = critique.cli:app`
-- [ ] Pin minimum versions of `ruff`, `bandit`, `mypy`, `coverage`
-- [ ] Add `requests`, `rich`, `typer`, `pydantic` (or whatever else is used)
-- [ ] Optional deps: `anthropic`, `openai` as extras (`pip install codecritique[cloud]`)
-- [ ] Test install in a fresh venv: `pip install -e .` then `codecritique check`
+- [x] Finalize `pyproject.toml` (name, version, deps, entry points, console_scripts)
+- [x] Entry point: `codecritique = critique.cli:app`
+- [x] Pin minimum versions of `ruff`, `bandit`, `mypy`, `coverage`
+- [x] Add `requests`, `rich`, `typer`, `pydantic` (or whatever else is used)
+- [x] Optional deps: `anthropic`, `openai` as extras (`pip install codecritique[cloud]`)
+- [x] Test install in a fresh venv: `pip install -e .` then `codecritique check`
 
 ### GitHub repo hygiene
-- [ ] `.gitignore` (Python defaults + `~/.codecritique/` if accidentally local)
-- [ ] `LICENSE` (MIT recommended)
-- [ ] `CHANGELOG.md`
-- [ ] Issue templates (`bug_report.md`, `feature_request.md`)
-- [ ] PR template
+- [x] `.gitignore` (Python defaults + `~/.codecritique/` if accidentally local)
+- [x] `LICENSE` (MIT recommended)
+- [x] `CHANGELOG.md`
+- [x] Issue templates (`bug_report.md`, `feature_request.md`)
+- [x] PR template
 
 ### GitHub Actions
-- [ ] `.github/workflows/test.yml` — pytest on push/PR
-- [ ] Run lint on own codebase as a self-test: `codecritique check --no-ai`
-- [ ] Matrix: Python 3.10, 3.11, 3.12
-- [ ] Cache dependencies for speed
+- [x] `.github/workflows/test.yml` — pytest on push/PR
+- [x] Run lint on own codebase as a self-test: `codecritique check --no-ai`
+- [x] Matrix: Python 3.10, 3.11, 3.12
+- [x] Cache dependencies for speed
 
 ### Release
 - [ ] Tag v0.1.0

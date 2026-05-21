@@ -8,9 +8,10 @@ import json
 import os
 import sys
 import asyncio
+import importlib
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import requests
@@ -42,7 +43,7 @@ from critique.checkers.base import Issue, Severity
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/day"])
 app = FastAPI(title="CodeCritique", description="AI-powered code review demo")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
 _static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
@@ -135,7 +136,7 @@ def _issue_to_dict(issue: Issue, source_lines: list[str]) -> dict:
 
 async def _anthropic_synthesis(issues: list[Issue], code: str, api_key: str) -> dict:
     """Call Anthropic Claude for an AI synthesis of findings."""
-    import anthropic as _anthropic
+    _anthropic = importlib.import_module("anthropic")
 
     client = _anthropic.Anthropic(api_key=api_key)
     numbered = "\n".join(

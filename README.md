@@ -52,12 +52,12 @@ If Ollama is not running when you invoke `critique`, the AI stages are skipped a
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
-3. **Install dependencies**:
+3. **Install CodeCritique**:
    ```bash
    pip install -e .
    ```
 
-Supported Python versions: 3.8 through 3.12.
+Supported Python versions: 3.10 through 3.12.
 
 ## Usage
 
@@ -66,25 +66,25 @@ Supported Python versions: 3.8 through 3.12.
 Run the critique on only your modified files (AI enabled by default):
 
 ```bash
-critique check
+codecritique check
 ```
 
 Run on specific files:
 
 ```bash
-critique check path/to/file.py
+codecritique check path/to/file.py
 ```
 
 Run a full scan of all Python files in the repository:
 
 ```bash
-critique check --no-incremental
+codecritique check --no-incremental
 ```
 
 Run with AI features disabled (static analysis only, no Ollama required):
 
 ```bash
-critique check --no-ai
+codecritique check --no-ai
 ```
 
 ### AI Report Output
@@ -124,7 +124,7 @@ Each issue includes:
 To automate this tool, install it as a Git `pre-push` hook. This prevents pushing if any fatal issues are found.
 
 ```bash
-critique install-hooks
+codecritique install-hooks
 ```
 
 ## Git Hooks Explained
