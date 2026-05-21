@@ -41,7 +41,7 @@ If Ollama is not running when you invoke `critique`, the AI stages are skipped a
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/yourusername/CodeCritique.git
+   git clone https://github.com/adesai-24/CodeCritique.git
    cd CodeCritique
    ```
 
@@ -58,6 +58,35 @@ If Ollama is not running when you invoke `critique`, the AI stages are skipped a
    ```
 
 Supported Python versions: 3.10 through 3.12.
+
+## Web Demo
+
+A browser-based demo is included in `web/`. It accepts pasted code and streams results live — no local install required for the reviewer.
+
+### Running the web server locally
+
+1. **Install web dependencies**:
+
+   ```bash
+   pip install -e ".[web]"
+   # Optional: add cloud AI synthesis
+   pip install -e ".[web,cloud]"
+   export ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+2. **Start the server** (from the repo root):
+
+   ```bash
+   uvicorn web.main:app --reload --port 8000
+   # Or on Windows:
+   .\web\start.ps1
+   ```
+
+3. **Open** `http://localhost:8000` in your browser.
+
+The demo runs the same Ruff, Bandit, and Mypy pipeline as the CLI. If `ANTHROPIC_API_KEY` is set it uses Claude for synthesis; otherwise it falls back to Ollama, then static-only mode.
+
+You can also load a file directly from GitHub using the "Fetch from GitHub" button — paste any `github.com/.../blob/...` file URL.
 
 ## Usage
 

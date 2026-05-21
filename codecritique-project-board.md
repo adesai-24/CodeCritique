@@ -244,7 +244,7 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 7 — Tests 🚧
+## Phase 7 — Tests ✅
 
 > Make this robust enough that you'd actually use it in CI.
 
@@ -314,7 +314,7 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 9 — Web Demo / Hosted Version ⏳
+## Phase 9 — Web Demo / Hosted Version 🚧
 
 > Optional but high-leverage for the recruiter pitch.
 
