@@ -12,34 +12,34 @@
 
   <style>
     /* ═══════════════════════════════════════════
-       TOKENS
+       TOKENS — crème / parchment
     ═══════════════════════════════════════════ */
     :root {
-      --bg:        #0d0b08;
-      --surface:   rgba(255,248,235,0.022);
-      --surface-2: rgba(255,248,235,0.042);
-      --border:    rgba(255,248,235,0.068);
-      --border-hi: rgba(255,248,235,0.14);
+      --bg:        #ede5d4;
+      --surface:   rgba(0,0,0,0.028);
+      --surface-2: rgba(0,0,0,0.052);
+      --border:    rgba(0,0,0,0.09);
+      --border-hi: rgba(0,0,0,0.18);
 
-      --accent:       #c8a96e;
-      --accent-2:     #f0c878;
-      --accent-dim:   rgba(200,169,110,0.13);
-      --accent-glow:  rgba(200,169,110,0.26);
+      --accent:       #6b4f2a;
+      --accent-2:     #9a7040;
+      --accent-dim:   rgba(107,79,42,0.1);
+      --accent-glow:  rgba(107,79,42,0.22);
 
-      --t1: rgba(255,248,235,0.92);
-      --t2: rgba(255,248,235,0.45);
-      --t3: rgba(255,248,235,0.2);
-      --t4: rgba(255,248,235,0.09);
+      --t1: rgba(25,18,8,0.88);
+      --t2: rgba(25,18,8,0.48);
+      --t3: rgba(25,18,8,0.26);
+      --t4: rgba(25,18,8,0.12);
 
-      --fatal:    #e86058;
-      --warn:     #e89540;
-      --info:     #6898e8;
-      --good:     #50be8a;
+      --fatal:    #b83030;
+      --warn:     #b06020;
+      --info:     #2850a8;
+      --good:     #256040;
 
-      --fatal-dim:  rgba(232,96,88,0.09);
-      --warn-dim:   rgba(232,149,64,0.09);
-      --info-dim:   rgba(104,152,232,0.09);
-      --good-dim:   rgba(80,190,138,0.09);
+      --fatal-dim:  rgba(184,48,48,0.08);
+      --warn-dim:   rgba(176,96,32,0.08);
+      --info-dim:   rgba(40,80,168,0.08);
+      --good-dim:   rgba(37,96,64,0.08);
 
       --radius:    14px;
       --radius-sm: 8px;
@@ -51,6 +51,15 @@
       --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
       --ease-out:    cubic-bezier(0.25, 0.46, 0.45, 0.94);
       --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+
+      /* dark editor panel tokens */
+      --ed-bg:       #17130e;
+      --ed-surface:  rgba(255,248,235,0.024);
+      --ed-border:   rgba(255,248,235,0.07);
+      --ed-border-hi:rgba(255,248,235,0.14);
+      --ed-t1:       rgba(255,248,235,0.88);
+      --ed-t2:       rgba(255,248,235,0.44);
+      --ed-t3:       rgba(255,248,235,0.2);
     }
 
     /* ═══════════════════════════════════════════
@@ -71,7 +80,7 @@
     }
 
     /* ═══════════════════════════════════════════
-       BACKGROUND
+       BACKGROUND — subtle multi-hue crème mesh
     ═══════════════════════════════════════════ */
     body::before {
       content: '';
@@ -80,33 +89,35 @@
       z-index: 0;
       pointer-events: none;
       background:
-        radial-gradient(ellipse 70% 55% at 15% 25%, rgba(200,169,110,0.04) 0%, transparent 65%),
-        radial-gradient(ellipse 40% 35% at 85% 75%, rgba(200,169,110,0.022) 0%, transparent 60%);
+        radial-gradient(ellipse 65% 55% at 8%  18%, rgba(210,175,130,0.55) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 45% at 88% 15%, rgba(195,165,175,0.35) 0%, transparent 60%),
+        radial-gradient(ellipse 55% 50% at 78% 88%, rgba(165,185,200,0.28) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 35% at 22% 85%, rgba(200,185,155,0.3)  0%, transparent 55%);
     }
 
-    /* Animated ambient orb — barely perceptible drift */
+    /* Slow-drifting ambient orb */
     .bg-orb {
       position: fixed;
-      width: 700px;
-      height: 700px;
+      width: 800px;
+      height: 800px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(200,169,110,0.028) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(180,150,100,0.18) 0%, transparent 65%);
       z-index: 0;
       pointer-events: none;
-      top: -200px;
+      top: -250px;
       left: -200px;
-      filter: blur(2px);
-      animation: orbDrift 28s ease-in-out infinite;
+      filter: blur(4px);
+      animation: orbDrift 30s ease-in-out infinite;
     }
 
     @keyframes orbDrift {
-      0%, 100% { transform: translate(0, 0); }
-      25%       { transform: translate(220px, 70px); }
-      50%       { transform: translate(120px, 220px); }
-      75%       { transform: translate(-40px, 120px); }
+      0%,100% { transform: translate(0,0); }
+      25%      { transform: translate(260px,80px); }
+      50%      { transform: translate(150px,260px); }
+      75%      { transform: translate(-50px,140px); }
     }
 
-    /* SVG noise grain */
+    /* SVG film grain — parchment texture */
     body::after {
       content: '';
       position: fixed;
@@ -114,7 +125,7 @@
       width: 200%; height: 200%;
       z-index: 1000;
       pointer-events: none;
-      opacity: 0.04;
+      opacity: 0.028;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
       background-size: 180px 180px;
       animation: grain 7s steps(8, end) infinite;
@@ -124,11 +135,11 @@
       0%  { transform: translate(0,0); }
       12% { transform: translate(-3%,-8%); }
       25% { transform: translate(5%,-3%); }
-      37% { transform: translate(-2%, 6%); }
-      50% { transform: translate(8%, 2%); }
-      62% { transform: translate(-4%, 9%); }
-      75% { transform: translate(2%, -5%); }
-      87% { transform: translate(-7%, 3%); }
+      37% { transform: translate(-2%,6%); }
+      50% { transform: translate(8%,2%); }
+      62% { transform: translate(-4%,9%); }
+      75% { transform: translate(2%,-5%); }
+      87% { transform: translate(-7%,3%); }
       100%{ transform: translate(0,0); }
     }
 
@@ -154,7 +165,7 @@
     }
 
     /* ═══════════════════════════════════════════
-       NAV
+       NAV — crème glass
     ═══════════════════════════════════════════ */
     .nav {
       flex-shrink: 0;
@@ -164,11 +175,11 @@
       justify-content: space-between;
       padding: 0 18px;
       border-radius: var(--radius);
-      background: var(--surface);
+      background: rgba(240,233,218,0.7);
       border: 1px solid var(--border);
-      backdrop-filter: blur(40px) saturate(180%);
-      -webkit-backdrop-filter: blur(40px) saturate(180%);
-      box-shadow: 0 1px 0 var(--border), inset 0 1px 0 rgba(255,255,255,0.05);
+      backdrop-filter: blur(32px) saturate(160%);
+      -webkit-backdrop-filter: blur(32px) saturate(160%);
+      box-shadow: 0 1px 0 var(--border), inset 0 1px 0 rgba(255,255,255,0.5);
       animation: panelUp 0.55s var(--ease-out) 0.04s both;
     }
 
@@ -190,15 +201,13 @@
       color: var(--accent);
     }
 
-    .brand-mark svg {
-      width: 22px; height: 22px;
-    }
+    .brand-mark svg { width: 22px; height: 22px; }
 
     .nav-center {
       display: flex;
       align-items: center;
       gap: 2px;
-      background: rgba(255,255,255,0.035);
+      background: rgba(0,0,0,0.04);
       border: 1px solid var(--border);
       border-radius: 999px;
       padding: 3px;
@@ -221,9 +230,9 @@
     .nav-tab:hover { color: var(--t2); }
 
     .nav-tab.active {
-      background: rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.55);
       color: var(--t1);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.07);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.7);
     }
 
     .ai-status {
@@ -244,7 +253,7 @@
 
     .ai-status.live .ai-dot {
       background: var(--good);
-      box-shadow: 0 0 0 3px rgba(49,196,141,0.18);
+      box-shadow: 0 0 0 3px rgba(37,96,64,0.15);
     }
 
     .ai-status.live { color: var(--t2); }
@@ -260,18 +269,30 @@
       gap: 10px;
     }
 
+    /* Crème panel (results) */
     .panel {
       border-radius: var(--radius);
-      background: var(--surface);
+      background: rgba(240,233,218,0.6);
       border: 1px solid var(--border);
-      backdrop-filter: blur(60px) saturate(180%);
-      -webkit-backdrop-filter: blur(60px) saturate(180%);
+      backdrop-filter: blur(40px) saturate(150%);
+      -webkit-backdrop-filter: blur(40px) saturate(150%);
       box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.02),
-        0 24px 60px rgba(0,0,0,0.28);
+        inset 0 0 0 1px rgba(255,255,255,0.35),
+        0 8px 32px rgba(0,0,0,0.06);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    /* Dark editor panel overrides */
+    .panel.editor-panel {
+      background: var(--ed-bg);
+      border-color: var(--ed-border);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.03),
+        0 8px 32px rgba(0,0,0,0.3);
     }
 
     .panel:nth-child(1) { animation: panelUp 0.6s var(--ease-out) 0.1s both; }
@@ -287,6 +308,10 @@
       border-bottom: 1px solid var(--border);
     }
 
+    .editor-panel .panel-top {
+      border-bottom-color: var(--ed-border);
+    }
+
     .panel-label {
       font-size: 10px;
       font-weight: 700;
@@ -294,6 +319,8 @@
       text-transform: uppercase;
       color: var(--t3);
     }
+
+    .editor-panel .panel-label { color: var(--ed-t3); }
 
     .panel-actions {
       display: flex;
@@ -322,7 +349,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 12px 0 16px;
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--ed-border);
       gap: 10px;
     }
 
@@ -330,8 +357,7 @@
       font-size: 11px;
       font-family: var(--mono);
       font-weight: 500;
-      color: var(--t3);
-      transition: color 0.2s;
+      color: var(--ed-t3);
     }
 
     .btn-row { display: flex; gap: 7px; align-items: center; }
@@ -354,13 +380,25 @@
       letter-spacing: -0.1px;
     }
 
+    /* Ghost button on dark editor panel */
     .btn-ghost {
       background: transparent;
-      border-color: var(--border);
-      color: var(--t2);
+      border-color: var(--ed-border);
+      color: var(--ed-t2);
     }
 
     .btn-ghost:hover {
+      background: var(--ed-surface);
+      border-color: var(--ed-border-hi);
+      color: var(--ed-t1);
+    }
+
+    /* Ghost button on crème (nav) */
+    .nav .btn-ghost, .sample-wrap .btn-ghost {
+      border-color: var(--border);
+      color: var(--t2);
+    }
+    .nav .btn-ghost:hover, .sample-wrap .btn-ghost:hover {
       background: var(--surface-2);
       border-color: var(--border-hi);
       color: var(--t1);
@@ -368,23 +406,22 @@
 
     .btn-primary {
       background: var(--accent);
-      border-color: rgba(255,255,255,0.12);
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(200,169,110,0.28);
+      border-color: rgba(0,0,0,0.1);
+      color: #f5ede0;
+      box-shadow: 0 2px 8px rgba(107,79,42,0.3);
       min-width: 108px;
       justify-content: center;
-      /* magnetic transform applied via JS — no transition on transform */
       transition: box-shadow 0.2s var(--ease-out), opacity 0.2s, background 0.2s;
       will-change: transform;
     }
 
     .btn-primary:hover:not(:disabled) {
-      box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 18px rgba(200,169,110,0.4);
-      background: #d4b87a;
+      background: #7d5c32;
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 18px rgba(107,79,42,0.4);
     }
 
     .btn-primary:disabled {
-      opacity: 0.62;
+      opacity: 0.55;
       cursor: not-allowed;
       box-shadow: none;
     }
@@ -392,8 +429,8 @@
     /* Spinner */
     .spin {
       width: 11px; height: 11px;
-      border: 1.5px solid rgba(255,255,255,0.28);
-      border-top-color: #fff;
+      border: 1.5px solid rgba(245,237,224,0.3);
+      border-top-color: #f5ede0;
       border-radius: 50%;
       animation: rot 0.65s linear infinite;
       flex-shrink: 0;
@@ -409,13 +446,13 @@
       top: calc(100% + 6px);
       right: 0;
       min-width: 196px;
-      background: rgba(12,12,20,0.97);
-      backdrop-filter: blur(40px);
+      background: rgba(240,233,218,0.97);
+      backdrop-filter: blur(32px);
       border: 1px solid var(--border-hi);
       border-radius: var(--radius);
       padding: 5px;
       z-index: 200;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.14), 0 0 0 1px rgba(255,255,255,0.4);
       display: none;
       flex-direction: column;
       animation: dropIn 0.18s var(--ease-out);
@@ -443,7 +480,7 @@
 
     .sample-item:hover { background: var(--surface-2); color: var(--t1); }
 
-    .sample-icon { font-size: 12px; opacity: 0.7; }
+    .sample-icon { font-size: 12px; opacity: 0.6; }
 
     /* ═══════════════════════════════════════════
        RESULTS PANEL
@@ -467,10 +504,10 @@
     .results-scroll::-webkit-scrollbar { width: 3px; }
     .results-scroll::-webkit-scrollbar-track { background: transparent; }
     .results-scroll::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.07);
+      background: rgba(0,0,0,0.1);
       border-radius: 999px;
     }
-    .results-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+    .results-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
 
     /* ── Idle ── */
     .idle {
@@ -489,7 +526,6 @@
       height: 52px;
       margin-bottom: 22px;
       color: var(--t4);
-      opacity: 0.8;
     }
 
     .idle-title {
@@ -523,6 +559,12 @@
       margin-bottom: 14px;
     }
 
+    /* Spinner on light bg */
+    .progress-status .spin {
+      border-color: rgba(0,0,0,0.15);
+      border-top-color: var(--accent);
+    }
+
     .checker-row { display: flex; gap: 7px; flex-wrap: wrap; }
 
     .checker-chip {
@@ -541,16 +583,13 @@
     }
 
     .checker-chip.done {
-      border-color: rgba(49,196,141,0.28);
+      border-color: rgba(37,96,64,0.28);
       color: var(--good);
       background: var(--good-dim);
-      box-shadow: 0 0 8px rgba(49,196,141,0.08);
+      box-shadow: 0 0 8px rgba(37,96,64,0.06);
     }
 
-    .checker-chip.err {
-      opacity: 0.35;
-      text-decoration: line-through;
-    }
+    .checker-chip.err { opacity: 0.35; text-decoration: line-through; }
 
     /* ── Divider ── */
     .divider {
@@ -590,14 +629,13 @@
       content: '';
       flex: 1;
       height: 1px;
-      background: rgba(167,139,250,0.12);
+      background: rgba(107,79,42,0.12);
     }
 
     .summary-text {
       font-size: 13px;
       line-height: 1.72;
       color: var(--t2);
-      font-weight: 400;
     }
 
     /* ── Stats row ── */
@@ -629,9 +667,9 @@
     .stat.warn  .stat-num { color: var(--warn);  }
     .stat.info  .stat-num { color: var(--info);  }
 
-    .stat.fatal .stat-lbl { color: rgba(232,96,88,0.5); }
-    .stat.warn  .stat-lbl { color: rgba(232,149,64,0.5); }
-    .stat.info  .stat-lbl { color: rgba(104,152,232,0.5); }
+    .stat.fatal .stat-lbl { color: rgba(184,48,48,0.45); }
+    .stat.warn  .stat-lbl { color: rgba(176,96,32,0.45); }
+    .stat.info  .stat-lbl { color: rgba(40,80,168,0.45); }
 
     /* ── Pass banner ── */
     .pass-wrap {
@@ -640,14 +678,14 @@
       gap: 14px;
       padding: 18px;
       border-radius: var(--radius);
-      border: 1px solid rgba(49,196,141,0.18);
+      border: 1px solid rgba(37,96,64,0.2);
       background: var(--good-dim);
       animation: fadeUp 0.45s var(--ease-out) backwards;
     }
 
     .pass-check {
       width: 34px; height: 34px;
-      background: rgba(49,196,141,0.12);
+      background: rgba(37,96,64,0.1);
       border-radius: 10px;
       display: grid;
       place-items: center;
@@ -657,7 +695,7 @@
     }
 
     .pass-wrap strong { font-size: 13px; font-weight: 600; color: var(--good); display: block; margin-bottom: 2px; }
-    .pass-wrap span   { font-size: 11.5px; color: rgba(49,196,141,0.5); }
+    .pass-wrap span   { font-size: 11.5px; color: rgba(37,96,64,0.5); }
 
     /* ── Section label ── */
     .section-label {
@@ -689,10 +727,10 @@
       border-radius: 999px;
     }
 
-    .sl-fatal .section-label-dot  { background: var(--fatal); box-shadow: 0 0 5px rgba(240,82,82,0.45); }
-    .sl-warn  .section-label-dot  { background: var(--warn);  box-shadow: 0 0 5px rgba(227,160,8,0.45); }
-    .sl-info  .section-label-dot  { background: var(--info);  box-shadow: 0 0 5px rgba(74,140,247,0.45); }
-    .sl-good  .section-label-dot  { background: var(--good);  box-shadow: 0 0 5px rgba(49,196,141,0.45); }
+    .sl-fatal .section-label-dot  { background: var(--fatal); box-shadow: 0 0 5px rgba(184,48,48,0.35); }
+    .sl-warn  .section-label-dot  { background: var(--warn);  box-shadow: 0 0 5px rgba(176,96,32,0.35); }
+    .sl-info  .section-label-dot  { background: var(--info);  box-shadow: 0 0 5px rgba(40,80,168,0.35); }
+    .sl-good  .section-label-dot  { background: var(--good);  box-shadow: 0 0 5px rgba(37,96,64,0.35); }
 
     .sl-fatal .section-label-text  { color: var(--fatal); }
     .sl-warn  .section-label-text  { color: var(--warn);  }
@@ -707,7 +745,7 @@
     .issue-card {
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      background: transparent;
+      background: rgba(255,255,255,0.28);
       margin-bottom: 5px;
       cursor: pointer;
       overflow: hidden;
@@ -721,45 +759,22 @@
 
     .issue-card:hover {
       border-color: var(--border-hi);
-      background: rgba(255,255,255,0.018);
+      background: rgba(255,255,255,0.45);
     }
 
-    /* Colored glow bleeds from stripe on hover — gives material depth */
-    .issue-card.fatal:hover {
-      box-shadow:
-        inset 3px 0 16px rgba(232,96,88,0.07),
-        0 4px 20px rgba(232,96,88,0.07);
-    }
-    .issue-card.warning:hover {
-      box-shadow:
-        inset 3px 0 16px rgba(232,149,64,0.07),
-        0 4px 20px rgba(232,149,64,0.07);
-    }
-    .issue-card.info:hover {
-      box-shadow:
-        inset 3px 0 16px rgba(104,152,232,0.07),
-        0 4px 20px rgba(104,152,232,0.07);
-    }
+    .issue-card.fatal:hover   { box-shadow: inset 3px 0 14px rgba(184,48,48,0.05), 0 4px 16px rgba(184,48,48,0.05); }
+    .issue-card.warning:hover { box-shadow: inset 3px 0 14px rgba(176,96,32,0.05), 0 4px 16px rgba(176,96,32,0.05); }
+    .issue-card.info:hover    { box-shadow: inset 3px 0 14px rgba(40,80,168,0.05),  0 4px 16px rgba(40,80,168,0.05); }
 
-    .issue-main {
-      display: flex;
-      align-items: stretch;
-    }
+    .issue-main { display: flex; align-items: stretch; }
 
-    .issue-stripe {
-      width: 2px;
-      flex-shrink: 0;
-    }
+    .issue-stripe { width: 2px; flex-shrink: 0; }
 
     .fatal   .issue-stripe { background: var(--fatal); }
     .warning .issue-stripe { background: var(--warn);  }
     .info    .issue-stripe { background: var(--info);  }
 
-    .issue-content {
-      flex: 1;
-      padding: 10px 12px;
-      min-width: 0;
-    }
+    .issue-content { flex: 1; padding: 10px 12px; min-width: 0; }
 
     .issue-msg {
       font-size: 12.5px;
@@ -772,17 +787,9 @@
       text-overflow: ellipsis;
     }
 
-    .issue-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .issue-row { display: flex; align-items: center; gap: 10px; }
 
-    .issue-loc {
-      font-size: 11px;
-      font-family: var(--mono);
-      color: var(--t3);
-    }
+    .issue-loc { font-size: 11px; font-family: var(--mono); color: var(--t3); }
 
     .issue-code {
       font-size: 10px;
@@ -792,6 +799,7 @@
       border-radius: var(--radius-xs);
       border: 1px solid var(--border);
       color: var(--t3);
+      background: rgba(255,255,255,0.4);
     }
 
     .issue-toggle {
@@ -808,13 +816,7 @@
 
     .issue-card.open .issue-toggle { transform: rotate(90deg); color: var(--t2); }
 
-    /* Expandable detail */
-    .issue-detail {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.32s var(--ease-out);
-    }
-
+    .issue-detail { max-height: 0; overflow: hidden; transition: max-height 0.32s var(--ease-out); }
     .issue-card.open .issue-detail { max-height: 360px; }
 
     .issue-detail-inner {
@@ -823,6 +825,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      background: rgba(255,255,255,0.2);
     }
 
     .detail-label {
@@ -834,18 +837,14 @@
       margin-bottom: 5px;
     }
 
-    .detail-text {
-      font-size: 12px;
-      line-height: 1.68;
-      color: var(--t2);
-    }
+    .detail-text { font-size: 12px; line-height: 1.68; color: var(--t2); }
 
-    /* Code context */
+    /* Code context — dark block on light page */
     .code-ctx {
       border-radius: var(--radius-xs);
       overflow: hidden;
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,0.32);
+      border: 1px solid rgba(0,0,0,0.12);
+      background: #1e1810;
     }
 
     .code-line {
@@ -855,14 +854,14 @@
       line-height: 1.8;
     }
 
-    .code-line.hl { background: rgba(240,82,82,0.08); }
+    .code-line.hl { background: rgba(184,48,48,0.12); }
 
     .ln {
       min-width: 34px;
       padding: 0 8px 0 10px;
-      color: var(--t4);
+      color: rgba(255,248,235,0.2);
       text-align: right;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid rgba(255,248,235,0.07);
       user-select: none;
       flex-shrink: 0;
     }
@@ -871,7 +870,7 @@
 
     .lc {
       padding: 0 10px;
-      color: rgba(255,255,255,0.6);
+      color: rgba(255,248,235,0.65);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: pre;
@@ -885,16 +884,11 @@
       align-items: flex-start;
       gap: 8px;
       font-size: 12px;
-      color: rgba(49,196,141,0.7);
+      color: rgba(37,96,64,0.7);
       line-height: 1.5;
     }
 
-    .good-check {
-      flex-shrink: 0;
-      margin-top: 1px;
-      font-size: 11px;
-      color: var(--good);
-    }
+    .good-check { flex-shrink: 0; margin-top: 1px; font-size: 11px; color: var(--good); }
 
     /* ── Animations ── */
     @keyframes fadeUp {
@@ -907,9 +901,7 @@
       to   { opacity: 1; transform: translateY(0);   }
     }
 
-    .card-anim {
-      animation: cardIn 0.38s var(--ease-out) backwards;
-    }
+    .card-anim { animation: cardIn 0.38s var(--ease-out) backwards; }
 
     /* ═══════════════════════════════════════════
        UTILITIES
@@ -919,7 +911,6 @@
 </head>
 <body>
 
-<!-- Ambient background orb -->
 <div class="bg-orb"></div>
 
 <div class="shell">
@@ -951,8 +942,8 @@
   <!-- ─── Panels ─── -->
   <div class="panels">
 
-    <!-- ── Editor ── -->
-    <div class="panel">
+    <!-- ── Editor (dark) ── -->
+    <div class="panel editor-panel">
       <div class="panel-top">
         <span class="panel-label">Editor</span>
         <div class="panel-actions">
@@ -981,7 +972,7 @@
       </div>
     </div>
 
-    <!-- ── Results ── -->
+    <!-- ── Results (crème) ── -->
     <div class="panel">
       <div class="panel-top">
         <span class="panel-label">Review</span>
@@ -1132,12 +1123,12 @@ class Config:
 
 var running = false;
 
-// ── Count-up animation ────────────────────────────────────────────────────────
+// ── Count-up animation ─────────────────────────────────────────────────────────
 function animateCount(el, target, duration) {
   duration = duration || 650;
   var start = performance.now();
   function tick(now) {
-    var t = Math.min((now - start) / duration, 1);
+    var t    = Math.min((now - start) / duration, 1);
     var ease = 1 - Math.pow(1 - t, 3);
     el.textContent = Math.round(ease * target);
     if (t < 1) requestAnimationFrame(tick);
@@ -1145,7 +1136,7 @@ function animateCount(el, target, duration) {
   requestAnimationFrame(tick);
 }
 
-// ── Magnetic button ───────────────────────────────────────────────────────────
+// ── Magnetic button ────────────────────────────────────────────────────────────
 (function initMagnet() {
   var btn = document.getElementById('runBtn');
   if (!btn) return;
@@ -1156,12 +1147,10 @@ function animateCount(el, target, duration) {
     var y = (e.clientY - r.top  - r.height / 2) * 0.22;
     btn.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
   });
-  btn.addEventListener('mouseleave', function() {
-    btn.style.transform = '';
-  });
+  btn.addEventListener('mouseleave', function() { btn.style.transform = ''; });
 })();
 
-// ── Health check ──────────────────────────────────────────────────────────────
+// ── Health check ───────────────────────────────────────────────────────────────
 (async function checkHealth() {
   try {
     var r = await fetch('/api/health');
@@ -1174,9 +1163,7 @@ function animateCount(el, target, duration) {
     } else {
       lbl.textContent = 'Static';
     }
-  } catch {
-    document.getElementById('ai-label').textContent = 'Offline';
-  }
+  } catch { document.getElementById('ai-label').textContent = 'Offline'; }
 })();
 
 // ── Editor helpers ─────────────────────────────────────────────────────────────
@@ -1207,7 +1194,7 @@ function setTab(el) {
   el.classList.add('active');
 }
 
-// ── Results helpers ───────────────────────────────────────────────────────────
+// ── Results helpers ────────────────────────────────────────────────────────────
 function resetResults() {
   document.getElementById('results').innerHTML =
     '<div class="idle">' +
@@ -1235,7 +1222,7 @@ function esc(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
-// ── Review runner ─────────────────────────────────────────────────────────────
+// ── Review runner ──────────────────────────────────────────────────────────────
 async function runReview() {
   if (running || !window._editor) return;
   var code = window._editor.getValue().trim();
@@ -1247,7 +1234,6 @@ async function runReview() {
   runBtn.style.transform = '';
   runBtn.innerHTML = '<span class="spin"></span>Reviewing…';
 
-  // ── Build progress UI ──────────────────────────────────────────────────
   var results = document.getElementById('results');
   results.innerHTML = '';
 
@@ -1272,7 +1258,6 @@ async function runReview() {
   progWrap.appendChild(checkerRow);
   results.appendChild(progWrap);
 
-  // ── SSE stream ────────────────────────────────────────────────────────
   var issuesData   = [];
   var synthData    = null;
   var completeData = null;
@@ -1294,15 +1279,12 @@ async function runReview() {
       var chunk = await reader.read();
       if (chunk.done) break;
       buf += dec.decode(chunk.value, { stream: true });
-
       var lines = buf.split('\n');
       buf = lines.pop();
-
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
-        if (line.startsWith('event:')) {
-          evtType = line.slice(6).trim();
-        } else if (line.startsWith('data:')) {
+        if (line.startsWith('event:'))      { evtType = line.slice(6).trim(); }
+        else if (line.startsWith('data:')) {
           var data;
           try { data = JSON.parse(line.slice(5).trim()); } catch(ex) { continue; }
           handleEvent(evtType, data);
@@ -1318,24 +1300,19 @@ async function runReview() {
     return;
   }
 
-  // ── Render report ─────────────────────────────────────────────────────
   results.innerHTML = '';
   renderReport(issuesData, synthData, completeData);
-
   running = false;
   runBtn.disabled = false;
   runBtn.textContent = 'Run Review';
 
-  // ── Event dispatcher ──────────────────────────────────────────────────
   function handleEvent(type, data) {
     switch (type) {
       case 'status':
         if (progStatus.firstChild && progStatus.firstChild.nodeType === 1) {
           while (progStatus.childNodes.length > 1) progStatus.removeChild(progStatus.lastChild);
           progStatus.appendChild(document.createTextNode(data.message));
-        } else {
-          progStatus.textContent = data.message;
-        }
+        } else { progStatus.textContent = data.message; }
         break;
       case 'checker_done': {
         var c = chips[data.checker];
@@ -1354,21 +1331,19 @@ async function runReview() {
   }
 }
 
-// ── Report renderer ───────────────────────────────────────────────────────────
+// ── Report renderer ────────────────────────────────────────────────────────────
 function renderReport(issues, synth, complete) {
   var results  = document.getElementById('results');
   var fatal    = issues.filter(function(i) { return i.severity === 'FATAL'; });
   var warnings = issues.filter(function(i) { return i.severity === 'WARNING'; });
   var infos    = issues.filter(function(i) { return i.severity === 'INFO'; });
 
-  // Meta
   if (complete) {
     document.getElementById('results-meta').textContent =
       complete.total + ' issue' + (complete.total !== 1 ? 's' : '') +
       (complete.passed ? ' · clean' : ' · fix required');
   }
 
-  // AI summary
   if (synth && synth.summary) {
     var block   = mk('div', 'summary-block');
     var eyebrow = mk('div', 'summary-eyebrow');
@@ -1380,7 +1355,6 @@ function renderReport(issues, synth, complete) {
     results.appendChild(block);
   }
 
-  // Stats with count-up
   if (issues.length > 0) {
     var row = mk('div', 'stats-row');
     [['fatal', fatal.length, 'Fatal'], ['warn', warnings.length, 'Warnings'], ['info', infos.length, 'Info']].forEach(function(entry) {
@@ -1393,22 +1367,17 @@ function renderReport(issues, synth, complete) {
       s.appendChild(num);
       s.appendChild(l);
       row.appendChild(s);
-      // Trigger count-up after a brief delay for visual effect
-      setTimeout(function(el, target) {
-        animateCount(el, target);
-      }, 80, num, n);
+      setTimeout(function(el, target) { animateCount(el, target); }, 80, num, n);
     });
     results.appendChild(row);
   }
 
-  // Pass
   if (issues.length === 0) {
     var wrap = mk('div', 'pass-wrap');
     wrap.innerHTML = '<div class="pass-check">✓</div><div><strong>All Clear</strong><span>No issues found — code looks good.</span></div>';
     results.appendChild(wrap);
   }
 
-  // Issue sections
   function renderSection(label, cls, items, startDelay) {
     if (!items.length) return;
     results.appendChild(mk('div', 'divider'));
@@ -1427,13 +1396,11 @@ function renderReport(issues, synth, complete) {
   renderSection('Warnings', 'warn',  warnings, 80 + fatal.length * 45);
   renderSection('Info',     'info',  infos,    80 + (fatal.length + warnings.length) * 45);
 
-  // What's good
   if (synth && synth.whats_good && synth.whats_good.length) {
     results.appendChild(mk('div', 'divider'));
     var glSl = mk('div', 'section-label sl-good');
     glSl.innerHTML = '<div class="section-label-dot"></div><span class="section-label-text">What\'s Good</span>';
     results.appendChild(glSl);
-
     var list = mk('div', 'good-list');
     synth.whats_good.forEach(function(item) {
       var row = mk('div', 'good-item');
@@ -1445,16 +1412,12 @@ function renderReport(issues, synth, complete) {
 }
 
 function makeCard(issue, delayMs) {
-  var sev = issue.severity.toLowerCase() === 'fatal'
-    ? 'fatal'
-    : issue.severity.toLowerCase() === 'warning'
-      ? 'warning'
-      : 'info';
+  var sev = issue.severity.toLowerCase() === 'fatal' ? 'fatal'
+    : issue.severity.toLowerCase() === 'warning' ? 'warning' : 'info';
 
   var card = mk('div', 'issue-card ' + sev + ' card-anim');
   card.style.animationDelay = delayMs + 'ms';
 
-  // Main row
   var main    = mk('div', 'issue-main');
   var stripe  = mk('div', 'issue-stripe');
   var content = mk('div', 'issue-content');
@@ -1480,7 +1443,6 @@ function makeCard(issue, delayMs) {
   main.appendChild(content);
   main.appendChild(toggle);
 
-  // Detail
   var detail = mk('div', 'issue-detail');
   var inner  = mk('div', 'issue-detail-inner');
 
@@ -1504,10 +1466,10 @@ function makeCard(issue, delayMs) {
     issue.code_context.forEach(function(line, idx) {
       var ln = (issue.context_start_line || 1) + idx;
       var hl = ln === issue.line;
-      var cRow  = mk('div', 'code-line' + (hl ? ' hl' : ''));
-      var lnEl  = mk('span', 'ln' + (hl ? ' hl' : ''));
+      var cRow = mk('div', 'code-line' + (hl ? ' hl' : ''));
+      var lnEl = mk('span', 'ln' + (hl ? ' hl' : ''));
       lnEl.textContent = ln;
-      var lcEl  = mk('span', 'lc');
+      var lcEl = mk('span', 'lc');
       lcEl.textContent = (line || '').replace(/\n$/, '');
       cRow.appendChild(lnEl);
       cRow.appendChild(lcEl);
@@ -1531,7 +1493,7 @@ function makeCard(issue, delayMs) {
 </script>
 
 <!-- ═══════════════════════════════════════════
-     MONACO (loaded last so SAMPLES is defined)
+     MONACO
 ═══════════════════════════════════════════ -->
 <script>
 require.config({
@@ -1539,11 +1501,11 @@ require.config({
 });
 
 require(['vs/editor/editor.main'], function () {
-  monaco.editor.defineTheme('cc-dark', {
+  monaco.editor.defineTheme('cc-warm', {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'comment',  foreground: '3a3028', fontStyle: 'italic' },
+      { token: 'comment',  foreground: '3d3228', fontStyle: 'italic' },
       { token: 'keyword',  foreground: 'c8a96e' },
       { token: 'string',   foreground: '7ab888' },
       { token: 'number',   foreground: 'c87840' },
@@ -1551,7 +1513,7 @@ require(['vs/editor/editor.main'], function () {
       { token: 'operator', foreground: '5e5040' },
     ],
     colors: {
-      'editor.background':                  '#0d0b08',
+      'editor.background':                  '#17130e',
       'editor.foreground':                  '#c8bfa8',
       'editorLineNumber.foreground':        '#2a2318',
       'editorLineNumber.activeForeground':  '#c8a96e',
@@ -1564,9 +1526,9 @@ require(['vs/editor/editor.main'], function () {
       'scrollbarSlider.background':         '#ffffff08',
       'scrollbarSlider.hoverBackground':    '#ffffff14',
       'scrollbarSlider.activeBackground':   '#ffffff20',
-      'editorWidget.background':            '#130f0b',
+      'editorWidget.background':            '#0e0a06',
       'editorWidget.border':                '#ffffff0c',
-      'editorGutter.background':            '#0d0b08',
+      'editorGutter.background':            '#17130e',
       'editorIndentGuide.background':       '#1e1a14',
       'editorIndentGuide.activeBackground': '#2e2820',
     }
@@ -1575,7 +1537,7 @@ require(['vs/editor/editor.main'], function () {
   window._editor = monaco.editor.create(document.getElementById('editor-mount'), {
     value:               SAMPLES.security,
     language:            'python',
-    theme:               'cc-dark',
+    theme:               'cc-warm',
     fontSize:            12.5,
     fontFamily:          "'JetBrains Mono', 'Fira Code', monospace",
     fontLigatures:       true,
@@ -1603,11 +1565,10 @@ require(['vs/editor/editor.main'], function () {
     lineNumbers: 'on',
   });
 
-  // Live line count in footer
   function updateLineCount() {
     var model = window._editor.getModel();
     if (!model) return;
-    var n = model.getLineCount();
+    var n  = model.getLineCount();
     var el = document.getElementById('linecountTag');
     if (el) el.textContent = 'python · ' + n + ' line' + (n === 1 ? '' : 's');
   }
