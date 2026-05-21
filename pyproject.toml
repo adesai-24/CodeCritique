@@ -3,28 +3,60 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "critique"
+name = "codecritique"
 version = "0.1.0"
-description = "A native Code Critique tool for pre-push checks."
+description = "AI-assisted local code review and pre-push quality checks."
 readme = "README.md"
+license = "MIT"
 authors = [
-    { name = "User", email = "user@example.com" },
+    { name = "CodeCritique contributors" },
 ]
-requires-python = ">=3.8, <3.13"
+requires-python = ">=3.10, <3.13"
 dependencies = [
-    "typer[all]",
-    "rich",
-    "ruff",
-    "mypy",
-    "bandit",
-    "pytest",
-    "pytest-cov",
-    "coverage",
-    "requests",
+    "bandit>=1.9.0",
+    "coverage>=7.6.0",
+    "mypy>=1.13.0",
+    "pydantic>=2.9.0",
+    "requests>=2.32.0",
+    "rich>=13.9.0",
+    "ruff>=0.8.0",
+    "typer>=0.15.0",
+]
+keywords = ["code-review", "static-analysis", "ollama", "cli", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.optional-dependencies]
+cloud = [
+    "anthropic>=0.40.0",
+    "openai>=1.55.0",
+]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+]
+web = [
+    "fastapi>=0.115.0",
+    "slowapi>=0.1.9",
+    "sse-starlette>=2.1.0",
+    "uvicorn>=0.32.0",
 ]
 
 [project.scripts]
+codecritique = "critique.cli:app"
 critique = "critique.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/critique"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
