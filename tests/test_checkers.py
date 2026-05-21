@@ -11,6 +11,7 @@ from critique.checkers.lint import RuffChecker
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
+from critique.checkers.ai_critic import AICriticChecker
 
 
 def _run_result(stdout="", returncode=0):
@@ -192,3 +193,60 @@ class TestCoverageChecker:
         with patch("subprocess.run", side_effect=FileNotFoundError("coverage not found")):
             issues = CoverageChecker().run(["f.py"])
         assert issues == []
+
+
+# ---------------------------------------------------------------------------
+# AICriticChecker
+# ---------------------------------------------------------------------------
+
+class TestAICriticChecker:
+    def test_non_python_files_are_skipped(self):
+        llm = MagicMock()
+
+        issues = AICriticChecker(llm).run(["README.md"])
+
+        assert issues == []
+        llm.complete_json.assert_not_called()
+
+    def test_maps_llm_findings_to_issues(self, tmp_path):
+        file_path = tmp_path / "buggy.py"
+        file_path.write_text("def f():\n    return 1\n", encoding="utf-8")
+        llm = MagicMock()
+        llm.complete_json.return_value = {
+            "findings": [
+                {
+                    "line": 2,
+                    "title": "Suspicious return",
+                    "severity": "WARNING",
+                    "explanation": "This return looks incomplete.",
+                }
+            ]
+        }
+
+        issues = AICriticChecker(llm).run([str(file_path)])
+
+        assert len(issues) == 1
+        assert issues[0].file_path == str(file_path)
+        assert issues[0].line == 2
+        assert issues[0].code == "AI"
+        assert issues[0].severity == Severity.WARNING
+
+    def test_preserves_file_order_with_parallel_reviews(self, tmp_path, monkeypatch):
+        first = tmp_path / "first.py"
+        second = tmp_path / "second.py"
+        first.write_text("a = 1\n", encoding="utf-8")
+        second.write_text("b = 2\n", encoding="utf-8")
+        monkeypatch.setenv("CODECRITIQUE_AI_CRITIC_WORKERS", "2")
+
+        llm = MagicMock()
+
+        def fake_complete_json(**kwargs):
+            user = kwargs["user"]
+            title = "first" if "a = 1" in user else "second"
+            return {"findings": [{"line": 1, "title": title, "severity": "INFO"}]}
+
+        llm.complete_json.side_effect = fake_complete_json
+
+        issues = AICriticChecker(llm).run([str(first), str(second)])
+
+        assert [issue.message for issue in issues] == ["first", "second"]
