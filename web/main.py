@@ -31,16 +31,16 @@ _scripts = os.path.join(sys.prefix, "Scripts" if os.name == "nt" else "bin")
 if _scripts not in os.environ.get("PATH", ""):
     os.environ["PATH"] = _scripts + os.pathsep + os.environ.get("PATH", "")
 
-from critique.checkers.lint import RuffChecker
-from critique.checkers.security import BanditChecker
-from critique.checkers.types import MypyChecker
-from critique.checkers.base import Issue, Severity
+from critique.checkers.lint import RuffChecker  # noqa: E402
+from critique.checkers.security import BanditChecker  # noqa: E402
+from critique.checkers.types import MypyChecker  # noqa: E402
+from critique.checkers.base import Issue, Severity  # noqa: E402
 
 # ── FastAPI app ─────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/day"])
 app = FastAPI(title="CodeCritique", description="AI-powered code review demo")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 _static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static)), name="static")
@@ -105,12 +105,15 @@ async def _anthropic_synthesis(issues: list[Issue], code: str, api_key: str) -> 
     response = await loop.run_in_executor(
         None,
         lambda: client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-opus-4-7",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         ),
     )
-    raw = response.content[0].text.strip()
+    block = response.content[0]
+    if not hasattr(block, "text"):
+        raise ValueError(f"Unexpected response block type: {type(block).__name__}")
+    raw = block.text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
