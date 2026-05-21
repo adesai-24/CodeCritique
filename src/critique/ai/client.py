@@ -43,7 +43,7 @@ class LLMClient:
             raise RuntimeError(
                 "Ollama is not running. Start it with: ollama serve"
             )
-        payload: Any = {
+        payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system},
@@ -82,7 +82,7 @@ class LLMClient:
         chat_messages.extend(messages or [])
         chat_messages.append({"role": "user", "content": user})
 
-        payload: Any = {
+        payload = {
             "model": self.model,
             "messages": chat_messages,
             "stream": True,
@@ -123,7 +123,7 @@ class LLMClient:
             raise RuntimeError(
                 "Ollama is not running. Start it with: ollama serve"
             )
-        payload: Any = {
+        payload: Dict[str, Any] = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system},
