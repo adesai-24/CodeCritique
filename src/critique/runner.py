@@ -13,6 +13,7 @@ from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
 from critique.report import print_report, print_ai_report
+from critique.persistence import fallback_synthesis, save_report
 
 console = Console()
 
@@ -141,10 +142,14 @@ def run_all_checks(
                 if all_issues:
                     all_issues = enrich_issues(all_issues, llm)
                 synth = AISynthesizer(llm).synthesize(all_issues)
+                saved = save_report(synth, all_issues)
+                console.print(f"[dim]Saved review as {saved['id']}[/dim]")
                 return print_ai_report(synth, all_issues)
             else:
                 console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
+    saved = save_report(fallback_synthesis(all_issues), all_issues)
+    console.print(f"[dim]Saved review as {saved['id']}[/dim]")
     return print_report(all_issues)

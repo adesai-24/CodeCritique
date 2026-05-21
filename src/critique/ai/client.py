@@ -1,6 +1,6 @@
 import json
 import requests
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5-coder:7b"
@@ -59,6 +59,51 @@ class LLMClient:
         )
         resp.raise_for_status()
         return resp.json()["message"]["content"]
+
+    def complete_stream(
+        self,
+        system: str,
+        user: str,
+        messages: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.2,
+    ) -> Iterable[str]:
+        """
+        Send a streaming chat completion request and yield content chunks.
+
+        `messages` should contain prior conversation turns. The current user
+        message is appended after that history.
+        """
+        if not self.is_available():
+            raise RuntimeError(
+                "Ollama is not running. Start it with: ollama serve"
+            )
+
+        chat_messages = [{"role": "system", "content": system}]
+        chat_messages.extend(messages or [])
+        chat_messages.append({"role": "user", "content": user})
+
+        payload = {
+            "model": self.model,
+            "messages": chat_messages,
+            "stream": True,
+            "options": {"temperature": temperature},
+        }
+        with requests.post(
+            f"{self.base_url}/api/chat",
+            json=payload,
+            timeout=self.timeout,
+            stream=True,
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                data = json.loads(line)
+                chunk = data.get("message", {}).get("content", "")
+                if chunk:
+                    yield chunk
+                if data.get("done"):
+                    break
 
     def complete_json(
         self,
