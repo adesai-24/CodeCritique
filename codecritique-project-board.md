@@ -18,7 +18,7 @@
 | 6 | ⏳ Not Started | Config system + cloud provider fallback |
 | 7 | ⏳ Not Started | Test suite |
 | 8 | ⏳ Not Started | CI/CD + packaging |
-| 9 | ⏳ Not Started | Web demo / hosted version |
+| 9 | 🚧 In Progress | Web demo / hosted version |
 | 10 | ⏳ Not Started | Docs, polish, recruiter showcase |
 
 Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
@@ -362,19 +362,25 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 **Goal:** A URL the recruiter can click without installing anything.
 
 ### Backend
-- [ ] FastAPI wrapper around `critique` functions
-- [ ] `POST /api/review` — accept code (paste) or GitHub URL
-- [ ] Streams synth output as SSE
-- [ ] Uses cloud provider (Anthropic) for hosted version — local Ollama isn't reachable from the cloud
-- [ ] Rate limiting (`slowapi`, 10 reviews/hour/IP)
+- [x] FastAPI wrapper around `critique` functions (`web/main.py`)
+- [x] `POST /api/review` — accepts pasted code, streams SSE events
+- [x] Streams synth output as SSE (status, checker_done, issues, synthesis, complete events)
+- [x] Uses Anthropic if `ANTHROPIC_API_KEY` set, falls back to Ollama, then static-only
+- [x] Rate limiting (`slowapi`, 10 reviews/hour/IP)
+- [x] `GET /api/health` — reports AI provider availability
+- [x] Serves static frontend from `web/static/`
 
 ### Frontend
-- [ ] Single-page React + Vite app
-- [ ] Code editor (Monaco) for paste mode
-- [ ] GitHub URL input for repo/PR mode
-- [ ] Live-streaming report display (mirrors CLI Rich layout)
-- [ ] Apply-fix buttons that show the diff
-- [ ] Dark mode
+- [x] Single-page app — no build step, vanilla JS + Monaco from CDN (`web/static/index.html`)
+- [x] Monaco editor (glass-dark custom theme) for paste mode
+- [x] 4 sample snippets: clean, bugs, security, type errors
+- [x] Live-streaming report display — progress pills update as checkers complete
+- [x] AI Summary card, stats chips (Fatal/Warnings/Info), section headers
+- [x] Expandable issue cards with code context and line numbers
+- [x] "What's Good" section from AI synthesis
+- [x] Glassy liquid-glass UI: aurora background, backdrop-filter blur, subtle borders
+- [ ] GitHub URL input for repo/PR mode (stretch)
+- [ ] Apply-fix buttons (stretch)
 
 ### Deployment
 - [ ] Backend: Fly.io or Railway
@@ -384,8 +390,9 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 - [ ] Hard daily spend cap on cloud calls
 
 ### Demo readiness
-- [ ] Land-page tagline + description
-- [ ] Sample code prefilled so click-to-demo works in 5 seconds
+- [x] Sample code prefilled so click-to-demo works in 5 seconds
+- [x] AI badge shows active provider (Anthropic / Ollama / Static only)
+- [ ] Landing-page tagline + description
 - [ ] Link back to GitHub repo
 
 **Definition of done:** Public URL that runs a full review on pasted code in <30 seconds.
