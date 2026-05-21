@@ -218,28 +218,28 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 **Goal:** After a review, run `critique chat --last` and ask questions about findings.
 
 ### Persistence
-- [ ] Create `~/.codecritique/reports/` directory on first run
-- [ ] After each run, save `{timestamp}.json` with synth output + raw issues
-- [ ] Limit to last 50 reports (auto-delete oldest)
-- [ ] Add `critique list` subcommand to show recent reports
-- [ ] Each report gets a short ID (e.g. `rev_abc123`)
+- [x] Create `~/.codecritique/reports/` directory on first run
+- [x] After each run, save `{timestamp}.json` with synth output + raw issues
+- [x] Limit to last 50 reports (auto-delete oldest)
+- [x] Add `critique list` subcommand to show recent reports
+- [x] Each report gets a short ID (e.g. `rev_abc123`)
 
 ### Chat subcommand
-- [ ] Add `chat` command to `cli.py`
-- [ ] `critique chat <id>` loads that report
-- [ ] `critique chat --last` loads most recent
-- [ ] In-terminal REPL loop using `prompt_toolkit` or simple `input()`
-- [ ] `exit`/`quit`/Ctrl-D ends the session
+- [x] Add `chat` command to `cli.py`
+- [x] `critique chat <id>` loads that report
+- [x] `critique chat --last` loads most recent
+- [x] In-terminal REPL loop using `prompt_toolkit` or simple `input()`
+- [x] `exit`/`quit`/Ctrl-D ends the session
 
 ### LLM streaming
-- [ ] Add `complete_stream(system, user, messages)` to `LLMClient` (yields chunks)
-- [ ] Use Ollama's streaming endpoint (`stream=True`)
-- [ ] Rich renders chunks as they arrive
+- [x] Add `complete_stream(system, user, messages)` to `LLMClient` (yields chunks)
+- [x] Use Ollama's streaming endpoint (`stream=True`)
+- [x] Rich renders chunks as they arrive
 
 ### Chat context
-- [ ] System prompt: "You just reviewed this code. Answer follow-ups."
-- [ ] Pass full synth output + raw issues + conversation history each turn
-- [ ] Cap conversation history at last 10 exchanges (token budget)
+- [x] System prompt: "You just reviewed this code. Answer follow-ups."
+- [x] Pass full synth output + raw issues + conversation history each turn
+- [x] Cap conversation history at last 10 exchanges (token budget)
 
 **Definition of done:** Run a review, then run `critique chat --last`, ask "expand on finding 3" and get a streamed coherent response that references the actual code.
 
