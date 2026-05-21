@@ -131,7 +131,6 @@ def run_all_checks(
     Orchestrate the full check pipeline.
 
     Returns True if the push is allowed (no FATAL issues), False otherwise.
-    Phase 4 will swap print_report() for print_ai_report() when use_ai=True.
     """
     files = get_target_files(incremental, custom_files)
     if not files and incremental and not custom_files:
