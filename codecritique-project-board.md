@@ -14,7 +14,7 @@
 | 2 | ✅ Done | AI Critic — semantic review checker |
 | 3 | ✅ Done | AI Enricher — upgrade existing findings |
 | 4 | ✅ Done | AI Synthesizer + new report renderer |
-| 5 | ⏳ Not Started | Chat mode + report persistence |
+| 5 | ✅ Done | Chat mode + report persistence |
 | 6 | ⏳ Not Started | Config system + cloud provider fallback |
 | 7 | ⏳ Not Started | Test suite |
 | 8 | ⏳ Not Started | CI/CD + packaging |
@@ -211,7 +211,7 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 5 — Chat Mode + Persistence ⏳
+## Phase 5 — Chat Mode + Persistence ✅
 
 > Follow-up Q&A on the last review.
 
