@@ -16,7 +16,7 @@
 | 4 | ✅ Done | AI Synthesizer + new report renderer |
 | 5 | ⏳ Not Started | Chat mode + report persistence |
 | 6 | ⏳ Not Started | Config system + cloud provider fallback |
-| 7 | ⏳ Not Started | Test suite |
+| 7 | 🚧 In Progress | Test suite |
 | 8 | ⏳ Not Started | CI/CD + packaging |
 | 9 | 🚧 In Progress | Web demo / hosted version |
 | 10 | ⏳ Not Started | Docs, polish, recruiter showcase |
@@ -68,28 +68,28 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 1 — AI Bootstrap ⏳
+## Phase 1 — AI Bootstrap ✅
 
 > Get a local LLM responding to your code. ~1 hour.
 
 **Goal:** Smoke test that an LLM call works from inside the codebase.
 
 ### Local model setup
-- [ ] Install Ollama (`brew install ollama` or download)
+- [x] Install Ollama (`brew install ollama` or download)
 - [ ] Run `ollama serve` (or set up as background daemon)
-- [ ] Pick a model based on RAM and pull it
-  - [ ] `qwen2.5-coder:7b` (16GB+ RAM, recommended default)
+- [x] Pick a model based on RAM and pull it
+  - [x] `qwen2.5-coder:7b` (16GB+ RAM, recommended default)
   - [ ] `qwen2.5-coder:14b` (32GB+ RAM, better quality)
   - [ ] OR `deepseek-coder-v2:16b` (alternative)
 - [ ] Verify with CLI: `ollama run <model> "say hi"` returns a response
 
 ### LLM client module
-- [ ] Create `critique/ai/__init__.py`
-- [ ] Create `critique/ai/client.py` with `LLMClient` class
-- [ ] Implement `complete(system, user, temperature)` method
-- [ ] Implement `complete_json(system, user, schema)` method using Ollama's `format` param
-- [ ] Add timeout handling (120s default)
-- [ ] Add health check method (`is_available()` → `GET /api/tags`)
+- [x] Create `critique/ai/__init__.py`
+- [x] Create `critique/ai/client.py` with `LLMClient` class
+- [x] Implement `complete(system, user, temperature)` method
+- [x] Implement `complete_json(system, user, schema)` method using Ollama's `format` param
+- [x] Add timeout handling (120s default)
+- [x] Add health check method (`is_available()` → `GET /api/tags`)
 
 ### Smoke test
 - [ ] REPL test: instantiate `LLMClient`, run `complete()` with a basic prompt
@@ -100,34 +100,34 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 2 — AI Critic Checker ⏳
+## Phase 2 — AI Critic Checker ✅
 
 > A new `BaseChecker` that uses the LLM for semantic review.
 
 **Goal:** Drop AI into the existing checker pipeline as a peer of Ruff/Bandit/Mypy.
 
 ### Prompts & schemas
-- [ ] Create `critique/ai/prompts.py`
-- [ ] Write `CRITIC_SYSTEM` prompt (with "don't invent issues" guard)
-- [ ] Create `critique/ai/schemas.py`
-- [ ] Define `CRITIC_SCHEMA` JSON schema (findings array with line/title/explanation/severity)
+- [x] Create `critique/ai/prompts.py`
+- [x] Write `CRITIC_SYSTEM` prompt (with "don't invent issues" guard)
+- [x] Create `critique/ai/schemas.py`
+- [x] Define `CRITIC_SCHEMA` JSON schema (findings array with line/title/explanation/severity)
 
 ### Checker implementation
-- [ ] Create `critique/checkers/ai_critic.py`
-- [ ] `AICriticChecker(BaseChecker)` class
-- [ ] Iterates files, reads content, calls `LLMClient.complete_json()`
-- [ ] Maps each finding to an `Issue` with `code="AI"`
-- [ ] Skips files >30k chars (token budget)
-- [ ] Try/except around each file — one bad file doesn't kill the whole run
+- [x] Create `critique/checkers/ai_critic.py`
+- [x] `AICriticChecker(BaseChecker)` class
+- [x] Iterates files, reads content, calls `LLMClient.complete_json()`
+- [x] Maps each finding to an `Issue` with `code="AI"`
+- [x] Skips files >30k chars (token budget)
+- [x] Try/except around each file — one bad file doesn't kill the whole run
 
 ### Wire into runner
-- [ ] Import `AICriticChecker` and `LLMClient` in `runner.py`
-- [ ] Instantiate `LLMClient` once at the top of `scan_files()`
-- [ ] Add `AICriticChecker(llm)` to the checkers list
-- [ ] Progress label shows AI activity ("Running AI Critic...")
+- [x] Import `AICriticChecker` and `LLMClient` in `runner.py`
+- [x] Instantiate `LLMClient` once at the top of `scan_files()`
+- [x] Add `AICriticChecker(llm)` to the checkers list
+- [x] Progress label shows AI activity ("Running AI Critic...")
 
 ### Validation
-- [ ] Create a test file with a deliberate logic bug (off-by-one, wrong comparison) that linters won't catch
+- [x] Create a test file with a deliberate logic bug (off-by-one, wrong comparison) that linters won't catch
 - [ ] Run `critique check --no-incremental` on it
 - [ ] Verify AI Critic flags it
 - [ ] Run on clean code — verify AI doesn't invent issues (empty findings)
@@ -137,70 +137,70 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 3 — AI Enricher ⏳
+## Phase 3 — AI Enricher ✅
 
 > Upgrade existing linter findings with code-specific reasoning + suggested fixes.
 
 **Goal:** Replace generic "Type mismatch found." reasoning with specific, helpful explanations.
 
 ### Schema & prompt
-- [ ] `ENRICHER_SYSTEM` prompt in `critique/ai/prompts.py`
-- [ ] `ENRICHMENT_SCHEMA` in `critique/ai/schemas.py` (reasoning, suggested_fix, real_severity)
+- [x] `ENRICHER_SYSTEM` prompt in `critique/ai/prompts.py`
+- [x] `ENRICHMENT_SCHEMA` in `critique/ai/schemas.py` (reasoning, suggested_fix, real_severity)
 
 ### Model extension
-- [ ] Add `suggested_fix: Optional[str] = None` field to `Issue` in `base.py`
+- [x] Add `suggested_fix: Optional[str] = None` field to `Issue` in `base.py`
 - [ ] Confirm NamedTuple backward compat (no existing code breaks)
 
 ### Enricher implementation
-- [ ] Create `critique/ai/enricher.py`
-- [ ] `AIEnricher` class with `enrich(issue) -> Issue`
-- [ ] Format prompt with tool, file, line, message, code context
-- [ ] Parse response, return `issue._replace(reasoning=..., suggested_fix=...)`
-- [ ] Fail-open: any exception returns the original issue unchanged
+- [x] Create `critique/ai/enricher.py`
+- [x] `AIEnricher` class with `enrich(issue) -> Issue`
+- [x] Format prompt with tool, file, line, message, code context
+- [x] Parse response, return `issue._replace(reasoning=..., suggested_fix=...)`
+- [x] Fail-open: any exception returns the original issue unchanged
 
 ### Concurrency
-- [ ] Wrap enrichment in `ThreadPoolExecutor(max_workers=4)`
-- [ ] `enrich_issues(issues, llm) -> List[Issue]` helper in `runner.py`
-- [ ] Handle Ctrl-C gracefully (cancel pending futures)
-- [ ] Rich progress shows N/M enrichments complete
+- [x] Wrap enrichment in `ThreadPoolExecutor(max_workers=4)`
+- [x] `enrich_issues(issues, llm) -> List[Issue]` helper in `runner.py`
+- [x] Handle Ctrl-C gracefully (cancel pending futures)
+- [x] Rich progress shows N/M enrichments complete
 
 ### Wire into runner
-- [ ] Call `enrich_issues()` after `scan_files()`, before report
-- [ ] Guard behind the `--ai` flag (default on)
+- [x] Call `enrich_issues()` after `scan_files()`, before report
+- [x] Guard behind the `--ai` flag (default on)
 
 **Definition of done:** Every linter finding shows a code-specific reasoning sentence and a concrete suggested fix, not the hardcoded generic string.
 
 ---
 
-## Phase 4 — Synthesizer + New Report ⏳
+## Phase 4 — Synthesizer + New Report ✅
 
 > The user-facing brain. Turns a flat list of findings into a curated review.
 
 **Goal:** Output looks like a senior engineer wrote it, not like a lint dump.
 
 ### Schema & prompt
-- [ ] `SYNTHESIZER_SYSTEM` prompt in `prompts.py`
-- [ ] `SYNTH_SCHEMA` in `schemas.py` (summary, fix_first, critical[], warnings[], suggestions[], whats_good[])
+- [x] `SYNTHESIZER_SYSTEM` prompt in `prompts.py`
+- [x] `SYNTH_SCHEMA` in `schemas.py` (summary, fix_first, critical[], warnings[], suggestions[], whats_good[])
 
 ### Synthesizer implementation
-- [ ] Create `critique/ai/synthesizer.py`
-- [ ] `AISynthesizer.synthesize(issues) -> dict`
-- [ ] Format issues as numbered list for the prompt
-- [ ] Handle empty issues case (return clean "no issues" structure)
+- [x] Create `critique/ai/synthesizer.py`
+- [x] `AISynthesizer.synthesize(issues) -> dict`
+- [x] Format issues as numbered list for the prompt
+- [x] Handle empty issues case (return clean "no issues" structure)
 
 ### Report renderer
-- [ ] Add `print_ai_report(synth_output, issues)` to `report.py`
-- [ ] Top: summary panel (Rich `Panel`)
-- [ ] Fix First callout (yellow/red bordered panel) — pulls from `fix_first` index
-- [ ] Critical section — red header, each issue with file:line, reasoning, suggested_fix as `Syntax` block
-- [ ] Warnings section — yellow header
-- [ ] Suggestions section — blue header
-- [ ] What's Good section — green panel at the bottom
-- [ ] Exit code logic: FATAL/critical → 1, otherwise 0
+- [x] Add `print_ai_report(synth_output, issues)` to `report.py`
+- [x] Top: summary panel (Rich `Panel`)
+- [x] Fix First callout (yellow/red bordered panel) — pulls from `fix_first` index
+- [x] Critical section — red header, each issue with file:line, reasoning, suggested_fix as `Syntax` block
+- [x] Warnings section — yellow header
+- [x] Suggestions section — blue header
+- [x] What's Good section — green panel at the bottom
+- [x] Exit code logic: FATAL/critical → 1, otherwise 0
 
 ### Runner integration
-- [ ] Update `run_all_checks()` to call synthesizer + new report when `ai=True`
-- [ ] Keep old `print_report()` accessible via `--no-ai` flag
+- [x] Update `run_all_checks()` to call synthesizer + new report when `ai=True`
+- [x] Keep old `print_report()` accessible via `--no-ai` flag
 
 ### Visual QA
 - [ ] Screenshot the report on a repo with all 3 severity types
@@ -285,7 +285,7 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ---
 
-## Phase 7 — Tests ⏳
+## Phase 7 — Tests 🚧
 
 > Make this robust enough that you'd actually use it in CI.
 
@@ -293,11 +293,11 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 
 ### Unit tests
 - [ ] `tests/test_checkers.py` — each checker on a fixture file
-- [ ] `tests/test_git_utils.py` — mock `git diff` output
+- [x] `tests/test_git_utils.py` — mock `git diff` output
 - [ ] `tests/test_ai_client.py` — mock Ollama HTTP responses
 - [ ] `tests/test_enricher.py` — mock LLM, verify fail-open behavior
 - [ ] `tests/test_synthesizer.py` — verify schema-conforming output handling
-- [ ] `tests/test_runner.py` — end-to-end with `--no-ai` (no LLM dependency)
+- [x] `tests/test_runner.py` — end-to-end with `--no-ai` (no LLM dependency)
 
 ### Integration tests
 - [ ] `tests/integration/test_full_run.py` — runs real Ollama if available, skips if not
