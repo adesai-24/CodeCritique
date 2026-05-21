@@ -17,7 +17,7 @@
 | 5 | ✅ Done | Chat mode + report persistence |
 | 6 | ⏳ Not Started | Config system + cloud provider fallback |
 | 7 | ✅ Done | Test suite |
-| 8 | ⏳ Not Started | CI/CD + packaging |
+| 8 | 🚧 In Progress | CI/CD + packaging |
 | 9 | 🚧 In Progress | Web demo / hosted version |
 | 10 | ⏳ Not Started | Docs, polish, recruiter showcase |
 
@@ -326,25 +326,25 @@ Legend: ✅ Done · 🚧 In Progress · ⏳ Not Started
 **Goal:** `pip install codecritique` works, and PRs run tests automatically.
 
 ### Packaging
-- [ ] Finalize `pyproject.toml` (name, version, deps, entry points, console_scripts)
-- [ ] Entry point: `codecritique = critique.cli:app`
-- [ ] Pin minimum versions of `ruff`, `bandit`, `mypy`, `coverage`
-- [ ] Add `requests`, `rich`, `typer`, `pydantic` (or whatever else is used)
-- [ ] Optional deps: `anthropic`, `openai` as extras (`pip install codecritique[cloud]`)
-- [ ] Test install in a fresh venv: `pip install -e .` then `codecritique check`
+- [x] Finalize `pyproject.toml` (name, version, deps, entry points, console_scripts)
+- [x] Entry point: `codecritique = critique.cli:app`
+- [x] Pin minimum versions of `ruff`, `bandit`, `mypy`, `coverage`
+- [x] Add `requests`, `rich`, `typer`, `pydantic` (or whatever else is used)
+- [x] Optional deps: `anthropic`, `openai` as extras (`pip install codecritique[cloud]`)
+- [x] Test install in a fresh venv: `pip install -e .` then `codecritique check`
 
 ### GitHub repo hygiene
-- [ ] `.gitignore` (Python defaults + `~/.codecritique/` if accidentally local)
-- [ ] `LICENSE` (MIT recommended)
-- [ ] `CHANGELOG.md`
-- [ ] Issue templates (`bug_report.md`, `feature_request.md`)
-- [ ] PR template
+- [x] `.gitignore` (Python defaults + `~/.codecritique/` if accidentally local)
+- [x] `LICENSE` (MIT recommended)
+- [x] `CHANGELOG.md`
+- [x] Issue templates (`bug_report.md`, `feature_request.md`)
+- [x] PR template
 
 ### GitHub Actions
-- [ ] `.github/workflows/test.yml` — pytest on push/PR
-- [ ] Run lint on own codebase as a self-test: `codecritique check --no-ai`
-- [ ] Matrix: Python 3.10, 3.11, 3.12
-- [ ] Cache dependencies for speed
+- [x] `.github/workflows/test.yml` — pytest on push/PR
+- [x] Run lint on own codebase as a self-test: `codecritique check --no-ai`
+- [x] Matrix: Python 3.10, 3.11, 3.12
+- [x] Cache dependencies for speed
 
 ### Release
 - [ ] Tag v0.1.0
