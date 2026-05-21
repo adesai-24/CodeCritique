@@ -10,10 +10,10 @@
 | Phase | Status | Description |
 |---|---|---|
 | 0 | ✅ Done | Core CLI + static analysis foundation |
-| 1 | ⏳ Not Started | AI bootstrap (local LLM client) |
-| 2 | ⏳ Not Started | AI Critic — semantic review checker |
-| 3 | ⏳ Not Started | AI Enricher — upgrade existing findings |
-| 4 | ⏳ Not Started | AI Synthesizer + new report renderer |
+| 1 | ✅ Done | AI bootstrap (local LLM client) |
+| 2 | ✅ Done | AI Critic — semantic review checker |
+| 3 | ✅ Done | AI Enricher — upgrade existing findings |
+| 4 | ✅ Done | AI Synthesizer + new report renderer |
 | 5 | ⏳ Not Started | Chat mode + report persistence |
 | 6 | ⏳ Not Started | Config system + cloud provider fallback |
 | 7 | ⏳ Not Started | Test suite |
