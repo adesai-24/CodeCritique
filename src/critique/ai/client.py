@@ -6,7 +6,7 @@ import threading
 import time
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5-coder:7b"
@@ -16,7 +16,20 @@ AVAILABILITY_CACHE_SECONDS = 30.0
 
 _CACHE_LOCK = threading.Lock()
 _AVAILABILITY_LOCK = threading.Lock()
-_AVAILABILITY_CACHE: Dict[str, tuple[float, bool]] = {}
+_AVAILABILITY_CACHE: Dict[str, Tuple[float, bool]] = {}
+
+# In-memory cache: avoids all disk I/O on repeated queries within the same process.
+# Keyed by the same sha256 hash used for disk cache. No eviction — typical runs
+# touch far fewer than 1 000 unique prompts.
+_MEM_CACHE: Dict[str, Any] = {}
+_MEM_CACHE_LOCK = threading.Lock()
+
+# Disk-cache snapshot: we load the JSON file once and reuse it until the file
+# is modified on disk.  This cuts repeated disk reads when many threads call
+# _cache_get concurrently.
+_DISK_SNAPSHOT: Optional[Dict[str, Any]] = None
+_DISK_SNAPSHOT_MTIME: float = 0.0
+_DISK_SNAPSHOT_LOCK = threading.Lock()
 
 
 def _cache_enabled_by_env() -> bool:
@@ -30,6 +43,11 @@ class LLMClient:
 
     Supports plain-text completion and structured JSON completion.
     Fails with a clear RuntimeError (not a crash) when Ollama is offline.
+
+    Two-level cache:
+      1. In-memory dict  — instant, no I/O, lives for the process lifetime.
+      2. Disk JSON file  — survives across runs, loaded lazily and shared via
+         a snapshot that is only re-read when the file changes on disk.
     """
 
     def __init__(
@@ -54,16 +72,37 @@ class LLMClient:
         stable_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return sha256(stable_payload.encode("utf-8")).hexdigest()
 
-    def _load_cache(self) -> Dict[str, Any]:
-        try:
-            if not self._cache_path.exists():
-                return {}
-            data = json.loads(self._cache_path.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
-        except Exception:
-            return {}
+    # ------------------------------------------------------------------
+    # Disk snapshot helpers
+    # ------------------------------------------------------------------
 
-    def _write_cache(self, cache: Dict[str, Any]) -> None:
+    def _load_disk_snapshot(self) -> Dict[str, Any]:
+        """Return the disk cache, using a process-level snapshot to avoid
+        repeated file reads. The snapshot is invalidated when the file's
+        mtime changes."""
+        global _DISK_SNAPSHOT, _DISK_SNAPSHOT_MTIME
+        cache_path = self._cache_path
+        with _DISK_SNAPSHOT_LOCK:
+            try:
+                mtime = cache_path.stat().st_mtime if cache_path.exists() else 0.0
+            except Exception:
+                mtime = 0.0
+
+            if _DISK_SNAPSHOT is None or mtime != _DISK_SNAPSHOT_MTIME:
+                try:
+                    if cache_path.exists():
+                        data = json.loads(cache_path.read_text(encoding="utf-8"))
+                        _DISK_SNAPSHOT = data if isinstance(data, dict) else {}
+                    else:
+                        _DISK_SNAPSHOT = {}
+                except Exception:
+                    _DISK_SNAPSHOT = {}
+                _DISK_SNAPSHOT_MTIME = mtime
+
+            return _DISK_SNAPSHOT  # type: ignore[return-value]
+
+    def _write_disk(self, cache: Dict[str, Any]) -> None:
+        global _DISK_SNAPSHOT, _DISK_SNAPSHOT_MTIME
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             "w",
@@ -74,20 +113,46 @@ class LLMClient:
             json.dump(cache, tmp)
             tmp_path = Path(tmp.name)
         tmp_path.replace(self._cache_path)
+        # Update snapshot so subsequent reads in this process stay hot.
+        try:
+            _DISK_SNAPSHOT_MTIME = self._cache_path.stat().st_mtime
+        except Exception:
+            pass
+        _DISK_SNAPSHOT = cache
+
+    # ------------------------------------------------------------------
+    # Public cache interface
+    # ------------------------------------------------------------------
 
     def _cache_get(self, key: str) -> Optional[Any]:
         if not self.use_cache:
             return None
+
+        # 1. Check in-memory cache (no lock needed for dict reads in CPython,
+        #    but use one to be safe across platforms).
+        with _MEM_CACHE_LOCK:
+            if key in _MEM_CACHE:
+                return _MEM_CACHE[key]
+
+        # 2. Fall back to disk snapshot.
         with _CACHE_LOCK:
-            return self._load_cache().get(key)
+            value = self._load_disk_snapshot().get(key)
+        if value is not None:
+            with _MEM_CACHE_LOCK:
+                _MEM_CACHE[key] = value
+        return value
 
     def _cache_set(self, key: str, value: Any) -> None:
         if not self.use_cache:
             return
+
+        with _MEM_CACHE_LOCK:
+            _MEM_CACHE[key] = value
+
         with _CACHE_LOCK:
-            cache = self._load_cache()
+            cache = self._load_disk_snapshot().copy()
             cache[key] = value
-            self._write_cache(cache)
+            self._write_disk(cache)
 
     def is_available(self) -> bool:
         """Return True if Ollama is reachable."""
