@@ -38,6 +38,25 @@ ENRICHMENT_SCHEMA: Dict[str, Any] = {
     "required": ["reasoning", "suggested_fix", "real_severity"],
 }
 
+BATCH_ENRICHMENT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "enrichments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {"type": "string"},
+                    "suggested_fix": {"type": "string"},
+                    "real_severity": {"type": "string", "enum": ["FATAL", "WARNING", "INFO"]},
+                },
+                "required": ["reasoning", "suggested_fix", "real_severity"],
+            },
+        }
+    },
+    "required": ["enrichments"],
+}
+
 SYNTH_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
