@@ -38,6 +38,7 @@ from critique.checkers.lint import RuffChecker  # noqa: E402
 from critique.checkers.security import BanditChecker  # noqa: E402
 from critique.checkers.types import MypyChecker  # noqa: E402
 from critique.checkers.base import Issue, Severity  # noqa: E402
+from critique.persistence import fallback_synthesis  # noqa: E402
 
 # ── FastAPI app ─────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/day"])
@@ -161,15 +162,12 @@ async def _anthropic_synthesis(issues: list[Issue], code: str, api_key: str) -> 
     response = await loop.run_in_executor(
         None,
         lambda: client.messages.create(
-            model="claude-opus-4-7",
+            model="claude-opus-4-5",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         ),
     )
-    block = response.content[0]
-    if not hasattr(block, "text"):
-        raise ValueError(f"Unexpected response block type: {type(block).__name__}")
-    raw = block.text.strip()
+    raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -261,36 +259,57 @@ async def review_code(request: Request, body: ReviewRequest):
                 ("Types (Mypy)", MypyChecker()),
             ]
 
-            for name, checker in checkers:
-                yield {"event": "status", "data": json.dumps({"message": f"Running {name}…"})}
-                await asyncio.sleep(0)
+            async def run_checker(idx, name, checker):
+                events = [
+                    {"event": "status", "data": json.dumps({"message": f"Running {name}…"})}
+                ]
+                patched = []
                 try:
                     loop = asyncio.get_event_loop()
                     raw = await loop.run_in_executor(None, checker.run, [tmp_path])
                     patched = [
                         iss._replace(file_path=body.filename) for iss in raw
                     ]
-                    all_issues.extend(patched)
-                    yield {
+                    events.append({
                         "event": "checker_done",
                         "data": json.dumps({"checker": name, "count": len(raw)}),
-                    }
+                    })
                 except Exception as exc:
-                    yield {
+                    events.append({
                         "event": "checker_error",
                         "data": json.dumps({"checker": name, "error": str(exc)}),
-                    }
+                    })
+                return idx, patched, events
+
+            checker_tasks = [
+                asyncio.create_task(run_checker(idx, name, checker))
+                for idx, (name, checker) in enumerate(checkers)
+            ]
+            checker_results = [[] for _ in checkers]
+            for task in asyncio.as_completed(checker_tasks):
+                idx, patched, events = await task
+                checker_results[idx] = patched
+                for event in events:
+                    yield event
                 await asyncio.sleep(0)
+
+            for checker_issues in checker_results:
+                all_issues.extend(checker_issues)
 
             # ── AI synthesis ─────────────────────────────────────────────
             anthropic_key = os.getenv("ANTHROPIC_API_KEY")
             synthesis = None
+            ai_used = False
 
-            if anthropic_key:
+            if not all_issues:
+                synthesis = fallback_synthesis(all_issues)
+                yield {"event": "synthesis", "data": json.dumps(synthesis)}
+            elif anthropic_key:
                 yield {"event": "status", "data": json.dumps({"message": "Running AI synthesis (Anthropic)…"})}
                 await asyncio.sleep(0)
                 try:
                     synthesis = await _anthropic_synthesis(all_issues, body.code, anthropic_key)
+                    ai_used = True
                     yield {"event": "synthesis", "data": json.dumps(synthesis)}
                 except Exception as exc:
                     yield {"event": "ai_error", "data": json.dumps({"error": str(exc)})}
@@ -300,6 +319,7 @@ async def review_code(request: Request, body: ReviewRequest):
                 loop = asyncio.get_event_loop()
                 synthesis = await loop.run_in_executor(None, _ollama_synthesis, all_issues)
                 if synthesis:
+                    ai_used = True
                     yield {"event": "synthesis", "data": json.dumps(synthesis)}
                 else:
                     yield {"event": "status", "data": json.dumps({"message": "No AI available — static analysis only"})}
@@ -320,7 +340,7 @@ async def review_code(request: Request, body: ReviewRequest):
                     "warnings": warnings,
                     "info": info,
                     "passed": fatal == 0,
-                    "has_ai": synthesis is not None,
+                    "has_ai": ai_used,
                 }),
             }
         finally:

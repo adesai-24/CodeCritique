@@ -13,6 +13,8 @@ CodeCritique is a local development tool designed to evaluate your code before y
 - **AI Critic** *(new)*: Reviews each file with a local LLM (`qwen2.5-coder:7b` via Ollama) to catch logic bugs, edge cases, and design issues that static tools miss.
 - **AI Enricher** *(new)*: Runs concurrently to add plain-English reasoning and a concrete suggested fix to every issue found by any checker.
 - **AI Synthesizer + Report** *(new)*: Produces a curated summary — a "fix first" priority call, grouped critical/warning/suggestion buckets, and a "what's good" section — instead of a raw issue list.
+- **AI Response Cache** *(new)*: Reuses prior AI critic, enrichment, and synthesis responses for identical prompts so repeated checks of unchanged code return much faster after the first run.
+- **Parallel Analysis** *(new)*: Runs independent static checkers concurrently and reviews multiple AI critic files with bounded concurrency.
 
 ## Prerequisites
 
@@ -41,7 +43,7 @@ If Ollama is not running when you invoke `critique`, the AI stages are skipped a
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/adesai-24/CodeCritique.git
+   git clone https://github.com/yourusername/CodeCritique.git
    cd CodeCritique
    ```
 
@@ -58,35 +60,6 @@ If Ollama is not running when you invoke `critique`, the AI stages are skipped a
    ```
 
 Supported Python versions: 3.10 through 3.12.
-
-## Web Demo
-
-A browser-based demo is included in `web/`. It accepts pasted code and streams results live — no local install required for the reviewer.
-
-### Running the web server locally
-
-1. **Install web dependencies**:
-
-   ```bash
-   pip install -e ".[web]"
-   # Optional: add cloud AI synthesis
-   pip install -e ".[web,cloud]"
-   export ANTHROPIC_API_KEY=sk-ant-...
-   ```
-
-2. **Start the server** (from the repo root):
-
-   ```bash
-   uvicorn web.main:app --reload --port 8000
-   # Or on Windows:
-   .\web\start.ps1
-   ```
-
-3. **Open** `http://localhost:8000` in your browser.
-
-The demo runs the same Ruff, Bandit, and Mypy pipeline as the CLI. If `ANTHROPIC_API_KEY` is set it uses Claude for synthesis; otherwise it falls back to Ollama, then static-only mode.
-
-You can also load a file directly from GitHub using the "Fetch from GitHub" button — paste any `github.com/.../blob/...` file URL.
 
 ## Usage
 
@@ -163,6 +136,24 @@ The `install-hooks` command creates a script in `.git/hooks/pre-push`.
 Each time you run `git push`, your computer automatically runs `critique check --incremental` first. If the tool finds critical issues (like a syntax error or security hole), it returns a failure code to Git, which cancels your push. This ensures that only high-quality, verified code reaches your remote repository.
 
 When Ollama is running, the pre-push hook also runs the full AI pipeline. If Ollama is offline, the hook falls back to static-analysis-only mode without any extra configuration.
+
+## AI Caching
+
+AI reviews are slower than static checks because the model has to read the prompt, process code context, generate structured JSON, and return it over the local Ollama API. CodeCritique caches deterministic AI responses under `~/.codecritique/cache/llm_cache.json`, keyed by the model, prompt, schema, and generation options.
+
+That means the first AI review of a file or finding can still take a while, but repeated checks of unchanged code can reuse the cached critic, enrichment, and synthesis output instead of calling the model again. If the code, prompt, model, or schema changes, CodeCritique automatically misses the cache and asks the model for a fresh result.
+
+To force fresh AI responses for a run, disable the cache:
+
+```bash
+CODECRITIQUE_AI_CACHE=0 codecritique check
+```
+
+You can also tune concurrency when a machine has limited CPU or memory:
+
+```bash
+CODECRITIQUE_CHECKER_WORKERS=2 CODECRITIQUE_AI_CRITIC_WORKERS=1 codecritique check
+```
 
 ## Configuration
 
