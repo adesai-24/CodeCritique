@@ -76,7 +76,7 @@ _DISK_SNAPSHOT_LOCK = threading.Lock()
 # Stored in a separate JSON file next to the main cache.
 _SEM_INDEX: Optional[Dict[str, List[Dict[str, str]]]] = None
 _SEM_INDEX_MTIME: float = 0.0
-_SEM_INDEX_LOCK = threading.Lock()
+_SEM_INDEX_LOCK = threading.RLock()
 
 # Per-system-prompt locks for serialised Ollama access (prefix KV-cache reuse).
 _SYSTEM_LOCKS: Dict[str, threading.Lock] = {}
@@ -291,7 +291,11 @@ class LLMClient:
     # ------------------------------------------------------------------
 
     def _cache_key(self, payload: Dict[str, Any]) -> str:
-        stable = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        stable = json.dumps(
+            {"cache_dir": str(self.cache_dir), "payload": payload},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         return sha256(stable.encode("utf-8")).hexdigest()
 
     def _cache_get(self, key: str) -> Optional[Any]:
