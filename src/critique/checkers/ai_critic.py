@@ -1,17 +1,20 @@
 """
 AICriticChecker — semantic code review via local LLM.
 
-Optimizations over the naive whole-file approach
--------------------------------------------------
-1. AST-based cache key: we hash the AST dump rather than raw source text, so
+Optimizations
+-------------
+1. AST-based cache key: we hash ast.dump() rather than raw source text, so
    changes that only affect comments or whitespace don't invalidate cached
-   results.  A SyntaxError falls back to hashing the raw text.
+   results.  The actual request still sends the original source so the model
+   sees docstrings and inline context.  A SyntaxError falls back to hashing
+   the raw text.
 
 2. Function/class chunking: instead of sending an entire file as one prompt,
    we extract top-level functions and classes and review each independently.
    This keeps prompts small (faster inference, fewer tokens), improves cache
    granularity (editing one function doesn't invalidate results for others),
-   and lets us run chunks in parallel.
+   and serialises within a file so Ollama's prefix KV-cache stays hot across
+   consecutive chunks that share the same CRITIC_SYSTEM prefix.
 
 3. Files with no top-level definitions fall back to whole-file review (e.g.
    scripts, __init__.py with only imports).
@@ -20,7 +23,8 @@ Optimizations over the naive whole-file approach
 import ast
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple
+from hashlib import sha256
+from typing import List, Optional, Tuple
 
 from critique.checkers.base import BaseChecker, Issue, Severity
 from critique.ai.client import LLMClient
@@ -37,6 +41,25 @@ def _env_int(name: str, default: int) -> int:
         return int(os.environ.get(name, str(default)))
     except ValueError:
         return default
+
+
+def _ast_cache_key(chunk: str, system: str) -> Optional[str]:
+    """Derive a cache key from the AST structure of a code chunk.
+
+    Two chunks that differ only in comments or whitespace produce the same
+    key, so the LLM result is reused without a new inference call.  Returns
+    None on SyntaxError so the caller falls back to the default payload hash.
+
+    We include a short hash of the system prompt so that cache entries from
+    different prompt versions don't collide.
+    """
+    try:
+        tree = ast.parse(chunk)
+        ast_digest = sha256(ast.dump(tree).encode("utf-8")).hexdigest()
+        sys_prefix = sha256(system.encode("utf-8")).hexdigest()[:8]
+        return f"ast:{sys_prefix}:{ast_digest}"
+    except SyntaxError:
+        return None
 
 
 def _extract_chunks(source: str, file_path: str) -> List[Tuple[str, int]]:
@@ -132,6 +155,7 @@ class AICriticChecker(BaseChecker):
                     f"```python\n{chunk}\n```"
                 ),
                 schema=CRITIC_SCHEMA,
+                cache_key_override=_ast_cache_key(chunk, CRITIC_SYSTEM),
             )
             issues: List[Issue] = []
             for finding in result.get("findings", []):
