@@ -5,8 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from critique.checkers.base import Issue, Severity
-
-REPORTS_DIR = Path.home() / ".codecritique" / "reports"
+from critique.paths import REPORTS_DIR
 MAX_REPORTS = 50
 
 
