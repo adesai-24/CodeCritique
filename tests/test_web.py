@@ -17,8 +17,8 @@ if _web not in sys.path:
 
 from fastapi.testclient import TestClient
 
-import main  # noqa: E402
-from main import app  # noqa: E402
+from web import main  # noqa: E402
+from web.main import app  # noqa: E402
 
 client = TestClient(app, raise_server_exceptions=True)
 
