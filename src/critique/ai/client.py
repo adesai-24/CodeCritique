@@ -1,5 +1,18 @@
 """
-LLMClient — Ollama HTTP API wrapper with multi-layer intelligent caching.
+LLMClient — provider-agnostic LLM wrapper with multi-layer intelligent caching.
+
+Architecture
+------------
+``LLMClient`` owns the *caching* and *prompt-dedup* machinery; a pluggable
+**provider** owns the raw round-trip to one backend (Ollama, Gemini, OpenAI,
+Anthropic, vLLM, …).  The default provider is chosen from the user's config
+(:mod:`critique.config`), defaulting to Gemini's free tier.  Constructing
+``LLMClient(base_url=..., model=...)`` with no explicit provider keeps the
+historical behaviour of targeting a local Ollama server.
+
+The Ollama provider is defined in *this* module (rather than under
+``ai/providers/``) so its HTTP calls go through the module-level ``requests``
+object that the client's unit tests patch.
 
 Cache hierarchy (fastest → slowest)
 -------------------------------------
@@ -9,23 +22,14 @@ Cache hierarchy (fastest → slowest)
                              cache; catches near-duplicate prompts (same code,
                              different whitespace / minor edits).
 
-Ollama inference optimisations
---------------------------------
-* keep_alive               — model stays loaded in RAM between runs (avoids
-                             cold-start reload cost, typically 5-15 s).
-* num_keep                 — pins system-prompt tokens in Ollama's KV cache so
-                             the shared prefix is never evicted, giving the
-                             model an effective "free" prefix on every call
-                             that shares the same system prompt.
-* Per-system-prompt lock   — when multiple threads call the model with the
-                             same system prompt, they are serialised. Ollama
-                             detects identical prefixes in consecutive requests
-                             and skips recomputing attention for those tokens
-                             (prefix KV-cache reuse). Interleaving different
-                             system prompts would flush that prefix from the
-                             KV cache between calls.
+Ollama inference optimisations (no-ops for stateless cloud providers)
+---------------------------------------------------------------------
+* keep_alive / num_keep    — keep the model + system-prompt KV states warm.
+* Per-system-prompt lock   — serialise same-prefix calls so Ollama reuses the
+                             prefix KV cache instead of recomputing attention.
 """
 
+import contextlib
 import json
 import os
 import re
@@ -36,6 +40,8 @@ import time
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from critique.config import load_config
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5-coder:7b"
@@ -48,11 +54,9 @@ AVAILABILITY_CACHE_SECONDS = 30.0
 _DEFAULT_KEEP_ALIVE = os.environ.get("CODECRITIQUE_KEEP_ALIVE", "1h")
 
 # Minimum Jaccard similarity to accept a semantic cache hit.
-# Conservative: code semantics matter, so we require high structural overlap.
 _SEMANTIC_THRESHOLD = 0.82
 
-# Maximum number of candidates to scan per system-prompt bucket in the
-# semantic index.  Keeps the similarity search O(1) in practice.
+# Maximum number of candidates to scan per system-prompt bucket.
 _SEMANTIC_MAX_CANDIDATES = 150
 
 # -------------------------------------------------------------------------
@@ -72,13 +76,12 @@ _DISK_SNAPSHOT: Optional[Dict[str, Any]] = None
 _DISK_SNAPSHOT_MTIME: float = 0.0
 _DISK_SNAPSHOT_LOCK = threading.Lock()
 
-# Layer 3 — semantic index: system_hash → list of {full_hash, user_sig}
-# Stored in a separate JSON file next to the main cache.
+# Layer 3 — semantic index: system_hash → list of {full_hash, user_sig}.
 _SEM_INDEX: Optional[Dict[str, List[Dict[str, str]]]] = None
 _SEM_INDEX_MTIME: float = 0.0
 _SEM_INDEX_LOCK = threading.RLock()
 
-# Per-system-prompt locks for serialised Ollama access (prefix KV-cache reuse).
+# Per-system-prompt locks for serialised access (prefix KV-cache reuse).
 _SYSTEM_LOCKS: Dict[str, threading.Lock] = {}
 _SYSTEM_LOCKS_LOCK = threading.Lock()
 
@@ -116,11 +119,7 @@ def _jaccard(a: frozenset, b: frozenset) -> float:
 
 
 def _user_sig(user: str) -> str:
-    """Compact fingerprint of a user message for semantic comparison.
-
-    We store only the first 800 normalised characters to keep the index small
-    while still capturing enough of the prompt for reliable similarity scoring.
-    """
+    """Compact fingerprint of a user message for semantic comparison."""
     return _normalize_text(user)[:800]
 
 
@@ -133,25 +132,189 @@ def _get_system_lock(system_hash: str) -> threading.Lock:
 
 
 # -------------------------------------------------------------------------
+# OllamaProvider — default local backend (kept in-module for test patching)
+# -------------------------------------------------------------------------
+
+class OllamaProvider:
+    """Talks to a local Ollama HTTP server.
+
+    Implements the same surface as :class:`critique.ai.providers.base.Provider`
+    but lives here so ``requests`` resolves to this module's import (which the
+    tests patch).  Returns *raw assistant text*; the client parses JSON.
+    """
+
+    name = "ollama"
+    supports_prefix_cache = True
+
+    def __init__(self, base_url: str = OLLAMA_BASE_URL, model: str = DEFAULT_MODEL, timeout: int = DEFAULT_TIMEOUT):
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.timeout = timeout
+
+    @property
+    def availability_key(self) -> str:
+        return self.base_url
+
+    def unavailable_message(self) -> str:
+        return "Ollama is not running. Start it with: ollama serve"
+
+    def is_available(self) -> bool:
+        try:
+            resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def _options(self, temperature: float, system: str) -> Dict[str, Any]:
+        # num_keep pins the system-prompt tokens at the front of the KV cache so
+        # consecutive same-prefix requests reuse them instead of recomputing.
+        return {"temperature": temperature, "num_keep": _approx_tokens(system)}
+
+    def complete_text(self, system: str, user: str, *, temperature: float) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "keep_alive": _DEFAULT_KEEP_ALIVE,
+            "options": self._options(temperature, system),
+        }
+        resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()["message"]["content"]
+
+    def complete_json(self, system: str, user: str, *, schema: Optional[Dict] = None) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "format": "json",
+            "keep_alive": _DEFAULT_KEEP_ALIVE,
+            "options": self._options(0.1, system),
+        }
+        resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()["message"]["content"]
+
+    def stream(
+        self,
+        system: str,
+        history: List[Dict[str, str]],
+        user: str,
+        *,
+        temperature: float,
+    ) -> Iterable[str]:
+        chat_messages = [{"role": "system", "content": system}]
+        chat_messages.extend(history or [])
+        chat_messages.append({"role": "user", "content": user})
+        payload: Any = {
+            "model": self.model,
+            "messages": chat_messages,
+            "stream": True,
+            "keep_alive": _DEFAULT_KEEP_ALIVE,
+            "options": self._options(temperature, system),
+        }
+        with requests.post(
+            f"{self.base_url}/api/chat", json=payload, timeout=self.timeout, stream=True
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                data = json.loads(line)
+                chunk = data.get("message", {}).get("content", "")
+                if chunk:
+                    yield chunk
+                if data.get("done"):
+                    break
+
+
+# -------------------------------------------------------------------------
+# Provider resolution
+# -------------------------------------------------------------------------
+
+def _resolve_provider(
+    provider: Optional[str],
+    base_url: Optional[str],
+    model: Optional[str],
+    timeout: int,
+    config,
+):
+    """Pick and construct the backend provider.
+
+    Back-compat rule: if a caller passes ``base_url``/``model`` but no explicit
+    ``provider`` (and none is set in the environment), assume the historical
+    Ollama target.  Otherwise fall back to the configured provider (Gemini by
+    default).
+    """
+    env_provider = os.environ.get("CODECRITIQUE_PROVIDER")
+    name = provider or env_provider
+    if name is None:
+        if base_url is not None or model is not None:
+            name = "ollama"
+        else:
+            name = config.provider
+    name = name.strip().lower()
+
+    # If the chosen provider matches the configured one, honour the configured
+    # model; otherwise (e.g. an explicit one-off provider) use the provider's
+    # own default.
+    configured_model = config.resolved_model() if config.provider == name else None
+
+    if name == "ollama":
+        return OllamaProvider(
+            base_url=base_url or config.base_url or OLLAMA_BASE_URL,
+            model=model or configured_model or DEFAULT_MODEL,
+            timeout=timeout,
+        )
+
+    # Cloud / remote providers built by the registry.
+    from critique.ai.providers import build_provider
+
+    return build_provider(
+        name,
+        model=model or configured_model,
+        base_url=base_url or config.base_url,
+        timeout=timeout,
+        config=config,
+    )
+
+
+# -------------------------------------------------------------------------
 # LLMClient
 # -------------------------------------------------------------------------
 
 class LLMClient:
-    """Thin wrapper around the Ollama HTTP API with intelligent caching."""
+    """Provider-agnostic LLM wrapper with intelligent caching."""
 
     def __init__(
         self,
-        base_url: str = OLLAMA_BASE_URL,
-        model: str = DEFAULT_MODEL,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
         timeout: int = DEFAULT_TIMEOUT,
         cache_dir: Optional[Path] = None,
         use_cache: Optional[bool] = None,
+        provider: Optional[str] = None,
+        config: Optional[Any] = None,
     ):
-        self.base_url = base_url.rstrip("/")
-        self.model = model
+        cfg = config if config is not None else load_config()
+        self.config = cfg
+        self.provider = _resolve_provider(provider, base_url, model, timeout, cfg)
+        # Expose a few attributes for back-compat with existing call sites/tests.
+        self.model = self.provider.model
+        self.base_url = getattr(self.provider, "base_url", None)
         self.timeout = timeout
         self.cache_dir = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR
         self.use_cache = use_cache if use_cache is not None else _cache_enabled_by_env()
+
+    @property
+    def provider_name(self) -> str:
+        return getattr(self.provider, "name", "unknown")
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -164,6 +327,15 @@ class LLMClient:
     @property
     def _sem_index_path(self) -> Path:
         return self.cache_dir / "semantic_index.json"
+
+    # ------------------------------------------------------------------
+    # System-prompt lock (only meaningful for prefix-cache providers)
+    # ------------------------------------------------------------------
+
+    def _maybe_system_lock(self, system: str):
+        if getattr(self.provider, "supports_prefix_cache", False):
+            return _get_system_lock(sha256(system.encode()).hexdigest())
+        return contextlib.nullcontext()
 
     # ------------------------------------------------------------------
     # Disk snapshot (layer 2)
@@ -235,29 +407,19 @@ class LLMClient:
         _SEM_INDEX = index
 
     def _sem_index_add(self, system_hash: str, full_hash: str, user: str) -> None:
-        """Register a new cache entry in the semantic index."""
         if not self.use_cache:
             return
         with _SEM_INDEX_LOCK:
             index = self._load_sem_index().copy()
             bucket = list(index.get(system_hash, []))
-            # Avoid duplicate entries for the same full_hash.
             if not any(e["full_hash"] == full_hash for e in bucket):
                 bucket.append({"full_hash": full_hash, "user_sig": _user_sig(user)})
-                # Cap bucket size to keep searches bounded.
                 if len(bucket) > _SEMANTIC_MAX_CANDIDATES:
                     bucket = bucket[-_SEMANTIC_MAX_CANDIDATES:]
             index[system_hash] = bucket
             self._write_sem_index(index)
 
     def _sem_cache_lookup(self, system_hash: str, user: str) -> Optional[Any]:
-        """Search for a semantically similar cached result.
-
-        Computes character-trigram Jaccard similarity between the incoming
-        user message and every stored signature in the same system-prompt
-        bucket.  Returns the cached result for the best match if it exceeds
-        _SEMANTIC_THRESHOLD, otherwise None.
-        """
         if not self.use_cache:
             return None
         with _SEM_INDEX_LOCK:
@@ -280,19 +442,34 @@ class LLMClient:
                 best_hash = entry["full_hash"]
 
         if best_score >= _SEMANTIC_THRESHOLD and best_hash is not None:
-            # Fetch the actual result from the main cache.
             with _CACHE_LOCK:
-                result = self._load_disk_snapshot().get(best_hash)
-            return result
+                return self._load_disk_snapshot().get(best_hash)
         return None
 
     # ------------------------------------------------------------------
-    # Public cache interface
+    # Cache key + get/set
     # ------------------------------------------------------------------
 
-    def _cache_key(self, payload: Dict[str, Any]) -> str:
+    def _cache_key(
+        self,
+        kind: str,
+        system: str,
+        user: str,
+        *,
+        schema: Optional[Dict[str, Any]] = None,
+        temperature: Optional[float] = None,
+    ) -> str:
         stable = json.dumps(
-            {"cache_dir": str(self.cache_dir), "payload": payload},
+            {
+                "cache_dir": str(self.cache_dir),
+                "provider": self.provider_name,
+                "model": self.model,
+                "kind": kind,
+                "system": system,
+                "user": user,
+                "schema": schema,
+                "temperature": temperature,
+            },
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -322,77 +499,44 @@ class LLMClient:
             self._write_disk(cache)
 
     # ------------------------------------------------------------------
-    # Availability check
+    # Availability check (30s cached, delegated to the provider)
     # ------------------------------------------------------------------
 
     def is_available(self) -> bool:
+        key = getattr(self.provider, "availability_key", self.provider_name)
         now = time.monotonic()
-        cached = _AVAILABILITY_CACHE.get(self.base_url)
+        cached = _AVAILABILITY_CACHE.get(key)
         if cached and now - cached[0] < AVAILABILITY_CACHE_SECONDS:
             return cached[1]
-        try:
-            resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
-            available = resp.status_code == 200
-        except Exception:
-            available = False
+        available = self.provider.is_available()
         with _AVAILABILITY_LOCK:
-            _AVAILABILITY_CACHE[self.base_url] = (now, available)
+            _AVAILABILITY_CACHE[key] = (now, available)
         return available
 
-    # ------------------------------------------------------------------
-    # Internal: build Ollama options with prefix-cache hints
-    # ------------------------------------------------------------------
-
-    def _ollama_options(self, temperature: float, system: str) -> Dict[str, Any]:
-        """Return the options dict to include in every Ollama request.
-
-        num_keep pins the system-prompt tokens at the start of Ollama's KV
-        cache so they are never evicted when the context window fills up.
-        This is the application-side knob for prefix caching: consecutive
-        requests that share the same system prompt will reuse those KV states
-        rather than recomputing attention from scratch.
-        """
-        return {
-            "temperature": temperature,
-            "num_keep": _approx_tokens(system),
-        }
+    def unavailable_message(self) -> str:
+        return self.provider.unavailable_message()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def complete(self, system: str, user: str, temperature: float = 0.2) -> str:
-        """Plain-text completion.  Raises RuntimeError if Ollama is offline."""
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "stream": False,
-            "keep_alive": _DEFAULT_KEEP_ALIVE,
-            "options": self._ollama_options(temperature, system),
-        }
-        cache_key = self._cache_key({"kind": "text", "payload": payload})
+        """Plain-text completion.  Raises RuntimeError if the backend is offline."""
+        cache_key = self._cache_key("text", system, user, temperature=temperature)
 
-        # Layer 1 + 2: exact match.
         cached = self._cache_get(cache_key)
         if isinstance(cached, str):
             return cached
 
         if not self.is_available():
-            raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+            raise RuntimeError(self.provider.unavailable_message())
 
         system_hash = sha256(system.encode()).hexdigest()
-        with _get_system_lock(system_hash):
-            # Re-check after acquiring the lock (another thread may have just run).
+        with self._maybe_system_lock(system):
             cached = self._cache_get(cache_key)
             if isinstance(cached, str):
                 return cached
-
-            resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
-            resp.raise_for_status()
-            content = resp.json()["message"]["content"]
+            content = self.provider.complete_text(system, user, temperature=temperature)
 
         self._cache_set(cache_key, content)
         self._sem_index_add(system_hash, cache_key, user)
@@ -407,35 +551,8 @@ class LLMClient:
     ) -> Iterable[str]:
         """Streaming completion for interactive chat.  Not cached."""
         if not self.is_available():
-            raise RuntimeError("Ollama is not running. Start it with: ollama serve")
-
-        chat_messages = [{"role": "system", "content": system}]
-        chat_messages.extend(messages or [])
-        chat_messages.append({"role": "user", "content": user})
-
-        payload: Any = {
-            "model": self.model,
-            "messages": chat_messages,
-            "stream": True,
-            "keep_alive": _DEFAULT_KEEP_ALIVE,
-            "options": self._ollama_options(temperature, system),
-        }
-        with requests.post(
-            f"{self.base_url}/api/chat",
-            json=payload,
-            timeout=self.timeout,
-            stream=True,
-        ) as resp:
-            resp.raise_for_status()
-            for line in resp.iter_lines(decode_unicode=True):
-                if not line:
-                    continue
-                data = json.loads(line)
-                chunk = data.get("message", {}).get("content", "")
-                if chunk:
-                    yield chunk
-                if data.get("done"):
-                    break
+            raise RuntimeError(self.provider.unavailable_message())
+        yield from self.provider.stream(system, messages or [], user, temperature=temperature)
 
     def complete_json(
         self,
@@ -448,61 +565,38 @@ class LLMClient:
 
         cache_key_override
             When provided, this hash is used as the cache key instead of the
-            full payload hash.  Callers (e.g. AICriticChecker) can pass an
-            AST-derived hash so that cache hits survive comment / whitespace
-            edits that don't change code structure.  The actual request to
-            Ollama always contains the original user text.
+            normalised payload hash.  Callers (e.g. AICriticChecker) pass an
+            AST-derived hash so cache hits survive comment / whitespace edits.
 
-        Raises RuntimeError if Ollama is not running.
+        Raises RuntimeError if the backend is offline.
         """
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "stream": False,
-            "format": "json",
-            "keep_alive": _DEFAULT_KEEP_ALIVE,
-            "options": self._ollama_options(0.1, system),
-        }
+        cache_key = cache_key_override or self._cache_key("json", system, user, schema=schema)
 
-        cache_key = cache_key_override or self._cache_key(
-            {"kind": "json", "payload": payload, "schema": schema}
-        )
-
-        # Layer 1 + 2: exact match.
         cached = self._cache_get(cache_key)
         if cached is not None:
             return cached
 
         system_hash = sha256(system.encode()).hexdigest()
 
-        # Layer 3: semantic match (only on true cache misses; skip for overridden
-        # keys because the caller already performed semantic normalisation).
+        # Layer 3: semantic match (skip for overridden keys — the caller already
+        # normalised them).
         if cache_key_override is None:
             sem_hit = self._sem_cache_lookup(system_hash, user)
             if sem_hit is not None:
-                # Warm the exact-match cache so subsequent identical calls are O(1).
                 self._cache_set(cache_key, sem_hit)
                 return sem_hit
 
         if not self.is_available():
-            raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+            raise RuntimeError(self.provider.unavailable_message())
 
-        with _get_system_lock(system_hash):
-            # Re-check after acquiring the lock.
+        with self._maybe_system_lock(system):
             cached = self._cache_get(cache_key)
             if cached is not None:
                 return cached
-
-            resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
-            resp.raise_for_status()
-            raw = resp.json()["message"]["content"]
+            raw = self.provider.complete_json(system, user, schema=schema)
             result = json.loads(raw)
 
         self._cache_set(cache_key, result)
-        # Register in semantic index only for regular (non-overridden) keys.
         if cache_key_override is None:
             self._sem_index_add(system_hash, cache_key, user)
         return result

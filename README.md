@@ -10,17 +10,74 @@ CodeCritique is a local development tool designed to evaluate your code before y
 - **Coverage Reports**: Checks test coverage using `Coverage.py`.
 - **Incremental Checking**: Optionally checks only the files that have changed in your current branch.
 - **Severity Levels**: Categorizes issues into "Fatal" (blocks pushes) and "Warnings" (actionable feedback).
-- **AI Critic** *(new)*: Reviews each file with a local LLM (`qwen2.5-coder:7b` via Ollama) to catch logic bugs, edge cases, and design issues that static tools miss.
+- **AI Critic** *(new)*: Reviews each file with an LLM to catch logic bugs, edge cases, and design issues that static tools miss.
+- **Pluggable AI Providers** *(new)*: Use Google **Gemini** (the free default), local **Ollama**, **OpenAI**, **Anthropic**, or a self-hosted **vLLM** endpoint — switch with one command. API keys are stored in a permission-locked, git-ignored secrets file (never in the repo).
 - **AI Enricher** *(new)*: Runs concurrently to add plain-English reasoning and a concrete suggested fix to every issue found by any checker.
 - **AI Synthesizer + Report** *(new)*: Produces a curated summary — a "fix first" priority call, grouped critical/warning/suggestion buckets, and a "what's good" section — instead of a raw issue list.
 - **AI Response Cache** *(new)*: Reuses prior AI critic, enrichment, and synthesis responses for identical prompts so repeated checks of unchanged code return much faster after the first run.
 - **Parallel Analysis** *(new)*: Runs independent static checkers concurrently and reviews multiple AI critic files with bounded concurrency.
 
+## AI Providers & API Keys
+
+CodeCritique's AI pipeline is **provider-agnostic**. By default it uses Google
+**Gemini**, because Google offers a generous free API tier — but you can switch
+to any supported backend at any time.
+
+| Provider    | Default model                    | Needs a key? | Notes |
+|-------------|----------------------------------|--------------|-------|
+| `gemini`    | `gemini-2.0-flash`               | yes (free)   | Default. Get a free key at <https://aistudio.google.com/apikey> |
+| `ollama`    | `qwen2.5-coder:7b`               | no           | Fully local; requires the Ollama server (see below) |
+| `openai`    | `gpt-4o-mini`                    | yes          | Hosted OpenAI |
+| `anthropic` | `claude-3-5-haiku-latest`        | yes          | Hosted Claude |
+| `vllm`      | `Qwen/Qwen2.5-Coder-7B-Instruct` | optional     | Self-hosted, OpenAI-compatible endpoint |
+
+Install the cloud SDKs (only needed for `gemini`/`openai`/`anthropic`/`vllm`):
+
+```bash
+pip install -e '.[cloud]'
+```
+
+### Configuring a provider and key
+
+```bash
+# See what's supported and what's currently configured
+codecritique config providers
+codecritique config show
+
+# Use the free Gemini default — just add your key
+codecritique config set-key gemini            # prompts; input is hidden
+# ...or non-interactively:
+codecritique config set-key gemini AIza...
+
+# Switch providers
+codecritique config set provider openai
+codecritique config set-key openai sk-...
+
+# Point at a local vLLM server (no key required)
+codecritique config set provider vllm
+codecritique config set base_url http://localhost:8000/v1
+```
+
+### How keys are kept safe
+
+- Keys are stored in `~/.codecritique/secrets.env` with **`0600`** permissions
+  (owner-only) — **never** in the repository.
+- That path is **git-ignored** and the `.env` format is recognised by common
+  secret scanners.
+- Keys are **masked** (`AIza…q7Yk`) whenever they are displayed.
+- You can skip on-disk storage entirely by exporting an environment variable
+  (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …), which always
+  takes precedence over the secrets file. This is the recommended approach for
+  CI.
+
+If the selected provider has no key (or Ollama isn't running), the AI stages are
+skipped automatically and CodeCritique falls back to static analysis — no crash.
+
 ## Prerequisites
 
-### Ollama (required for AI features)
+### Ollama (optional — only for the local `ollama` provider)
 
-The AI pipeline requires [Ollama](https://ollama.com) running locally with the `qwen2.5-coder:7b` model pulled.
+The local AI path requires [Ollama](https://ollama.com) running with the `qwen2.5-coder:7b` model pulled.
 
 1. **Install Ollama** — download from [ollama.com](https://ollama.com) or via the installer for your platform.
 
@@ -162,6 +219,16 @@ Currently, the tool uses default configurations for the underlying tools:
 - **Coverage**: Hardcoded threshold of 80%.
 - **Linter**: Uses the default Ruff configuration.
 - **Incremental Mode**: Compares current branch changes against `origin/main`.
-- **AI Model**: `qwen2.5-coder:7b` via Ollama at `http://localhost:11434`. Override via environment variable or by editing `src/critique/ai/client.py`.
+- **AI Provider/Model**: Managed via `codecritique config` (stored in `~/.codecritique/config.json`). Defaults to `gemini` / `gemini-2.0-flash`.
 
-Future versions will support a `critique.toml` file for custom thresholds, rule exclusions, and model selection.
+Environment overrides (highest precedence) are available for scripting and CI:
+
+| Variable | Effect |
+|----------|--------|
+| `CODECRITIQUE_PROVIDER` | Override the active provider |
+| `CODECRITIQUE_MODEL`    | Override the model |
+| `CODECRITIQUE_BASE_URL` | Override the endpoint (ollama / vllm / openai-compatible) |
+| `CODECRITIQUE_TEMPERATURE` | Override sampling temperature |
+| `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Provider API keys (preferred for CI) |
+
+Future versions will support a per-project `critique.toml` for custom thresholds and rule exclusions.

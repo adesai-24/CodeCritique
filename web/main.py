@@ -180,7 +180,7 @@ def _ollama_synthesis(issues: list[Issue]) -> Optional[dict]:
     try:
         from critique.ai.client import LLMClient
         from critique.ai.synthesizer import AISynthesizer
-        llm = LLMClient()
+        llm = LLMClient(provider="ollama")
         if not llm.is_available():
             return None
         return AISynthesizer(llm).synthesize(issues)
@@ -199,7 +199,7 @@ async def health():
     ollama_ok = False
     try:
         from critique.ai.client import LLMClient
-        ollama_ok = LLMClient().is_available()
+        ollama_ok = LLMClient(provider="ollama").is_available()
     except Exception:
         pass
     return {

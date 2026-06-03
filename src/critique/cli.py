@@ -9,8 +9,10 @@ from critique.ai.client import LLMClient
 from critique.runner import run_all_checks
 from critique.git_utils import install_pre_push_hook
 from critique.persistence import list_reports, load_report
+from critique.config_cli import config_app
 
 app = typer.Typer(help="CodeCritique: A pre-push quality gate for your code.")
+app.add_typer(config_app, name="config")
 console = Console()
 
 @app.command()
@@ -101,7 +103,7 @@ def chat(
 
     llm = LLMClient()
     if not llm.is_available():
-        console.print("[red]Ollama is not running. Start it with: ollama serve[/red]")
+        console.print(f"[red]{llm.unavailable_message()}[/red]")
         raise typer.Exit(code=1)
 
     system = (

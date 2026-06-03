@@ -103,8 +103,8 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
                 checkers.append(AICriticChecker(llm))
             else:
                 console.print(
-                    "[yellow]Ollama not reachable — skipping AI Critic. "
-                    "Start it with: ollama serve[/yellow]"
+                    f"[yellow]AI provider ({llm.provider_name}) unavailable — "
+                    f"skipping AI Critic. {llm.unavailable_message()}[/yellow]"
                 )
         except Exception as exc:
             console.print(f"[yellow]AI Critic unavailable: {exc}[/yellow]")
@@ -187,7 +187,10 @@ def run_all_checks(
                 save_report_notice(synth, all_issues)
                 return print_ai_report(synth, all_issues)
             else:
-                console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
+                console.print(
+                    f"[yellow]AI provider ({llm.provider_name}) unavailable — "
+                    f"falling back to basic report. {llm.unavailable_message()}[/yellow]"
+                )
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
