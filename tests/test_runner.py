@@ -89,11 +89,11 @@ def test_run_all_checks_uses_print_report(monkeypatch):
     )
 
     monkeypatch.setattr(runner, "get_target_files", lambda incremental, custom_files: ["x.py"])
-    monkeypatch.setattr(runner, "scan_files", lambda files, use_ai: [fake_issue])
+    monkeypatch.setattr(runner, "scan_files", lambda files, use_ai, **kwargs: [fake_issue])
 
     captured = {}
 
-    def fake_print_report(issues):
+    def fake_print_report(issues, block_severity="FATAL"):
         captured["issues"] = issues
         return False
 

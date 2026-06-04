@@ -139,8 +139,19 @@ class AICriticChecker(BaseChecker):
     name = "AI Critic"
     description = "Semantic review via local LLM — catches logic bugs linters miss"
 
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, profile=None, project_context=None, custom_instructions=None):
         self.llm = llm
+        self.profile = profile
+        # Bake the active review mode + project context into the system prompt
+        # once. Because this string feeds the AST cache key, different modes
+        # cache independently and switching modes never serves a stale review.
+        if profile is not None:
+            from critique.profiles import apply_profile_to_system
+            self._system = apply_profile_to_system(
+                CRITIC_SYSTEM, profile, project_context, custom_instructions
+            )
+        else:
+            self._system = CRITIC_SYSTEM
 
     def _review_chunk(
         self, chunk: str, line_offset: int, file_path: str
@@ -148,14 +159,14 @@ class AICriticChecker(BaseChecker):
         """Review a single chunk (function/class/module block) and return issues."""
         try:
             result = self.llm.complete_json(
-                system=CRITIC_SYSTEM,
+                system=self._system,
                 user=(
                     f"Review this Python code (from {file_path}, starting at line {line_offset}) "
                     "for logic bugs and correctness issues:\n\n"
                     f"```python\n{chunk}\n```"
                 ),
                 schema=CRITIC_SCHEMA,
-                cache_key_override=_ast_cache_key(chunk, CRITIC_SYSTEM),
+                cache_key_override=_ast_cache_key(chunk, self._system),
             )
             issues: List[Issue] = []
             for finding in result.get("findings", []):

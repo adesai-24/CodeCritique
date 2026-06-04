@@ -18,10 +18,8 @@ Fail-open contract: any exception at any stage returns the original issue unchan
 One bad enrichment never kills the full pipeline.
 """
 
-import json
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set
 
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
@@ -83,7 +81,9 @@ def _format_issue_for_batch(idx: int, issue: Issue) -> str:
     )
 
 
-def _enrich_batch(issues: List[Issue], llm: LLMClient) -> Optional[List[Issue]]:
+def _enrich_batch(
+    issues: List[Issue], llm: LLMClient, system: str = BATCH_ENRICHER_SYSTEM
+) -> Optional[List[Issue]]:
     """
     Send all issues in a single LLM call.  Returns a fully-enriched list aligned
     with the input, or None if the call fails / produces a malformed response.
@@ -98,7 +98,7 @@ def _enrich_batch(issues: List[Issue], llm: LLMClient) -> Optional[List[Issue]]:
 
     try:
         result = llm.complete_json(
-            system=BATCH_ENRICHER_SYSTEM,
+            system=system,
             user=user_msg,
             schema=BATCH_ENRICHMENT_SCHEMA,
         )
@@ -128,8 +128,9 @@ def _enrich_batch(issues: List[Issue], llm: LLMClient) -> Optional[List[Issue]]:
 class AIEnricher:
     """Fallback per-issue enricher used when the batch call fails."""
 
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, system: str = ENRICHER_SYSTEM):
         self.llm = llm
+        self.system = system
 
     def enrich(self, issue: Issue) -> Issue:
         try:
@@ -143,7 +144,7 @@ class AIEnricher:
                 "Explain why this is a problem in THIS specific code and provide a concrete fix."
             )
             result = self.llm.complete_json(
-                system=ENRICHER_SYSTEM,
+                system=self.system,
                 user=user_msg,
                 schema=ENRICHMENT_SCHEMA,
             )
@@ -163,10 +164,10 @@ class AIEnricher:
 
 
 def _enrich_per_issue_fallback(
-    issues: List[Issue], llm: LLMClient, progress_callback=None
+    issues: List[Issue], llm: LLMClient, progress_callback=None, system: str = ENRICHER_SYSTEM
 ) -> List[Issue]:
     """Concurrent per-issue enrichment used as a fallback."""
-    enricher = AIEnricher(llm)
+    enricher = AIEnricher(llm, system=system)
     enriched: List[Issue] = [None] * len(issues)  # type: ignore[list-item]
 
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
@@ -189,7 +190,13 @@ def _enrich_per_issue_fallback(
     return [e if e is not None else issues[i] for i, e in enumerate(enriched)]
 
 
-def enrich_issues(issues: List[Issue], llm: LLMClient) -> List[Issue]:
+def enrich_issues(
+    issues: List[Issue],
+    llm: LLMClient,
+    profile=None,
+    project_context=None,
+    custom_instructions=None,
+) -> List[Issue]:
     """
     Enrich all issues as fast as possible:
 
@@ -198,9 +205,24 @@ def enrich_issues(issues: List[Issue], llm: LLMClient) -> List[Issue]:
     3. If the batch response is malformed, fall back to per-issue concurrent mode.
 
     Returns results in original order.  Never raises.
+
+    The active review ``profile`` (if any) tunes the enrichment tone and is
+    folded into the system prompt, so different modes cache independently.
     """
     if not issues:
         return issues
+
+    if profile is not None:
+        from critique.profiles import apply_profile_to_system
+        batch_system = apply_profile_to_system(
+            BATCH_ENRICHER_SYSTEM, profile, project_context, custom_instructions
+        )
+        single_system = apply_profile_to_system(
+            ENRICHER_SYSTEM, profile, project_context, custom_instructions
+        )
+    else:
+        batch_system = BATCH_ENRICHER_SYSTEM
+        single_system = ENRICHER_SYSTEM
 
     # Separate trivial from non-trivial.
     trivial_indices: List[int] = []
@@ -225,7 +247,7 @@ def enrich_issues(issues: List[Issue], llm: LLMClient) -> List[Issue]:
 
         if nontrivial_issues:
             # Attempt fast batch enrichment.
-            batch_result = _enrich_batch(nontrivial_issues, llm)
+            batch_result = _enrich_batch(nontrivial_issues, llm, system=batch_system)
             if batch_result is not None:
                 enriched_nontrivial = batch_result
                 progress.advance(task, len(nontrivial_issues))
@@ -238,6 +260,7 @@ def enrich_issues(issues: List[Issue], llm: LLMClient) -> List[Issue]:
                     nontrivial_issues,
                     llm,
                     progress_callback=lambda: progress.advance(task),
+                    system=single_system,
                 )
         else:
             enriched_nontrivial = []

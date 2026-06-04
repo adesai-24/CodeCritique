@@ -65,7 +65,11 @@ class CritiqueConfig:
     base_url: Optional[str] = None       # for ollama / vllm / openai-compatible
     temperature: float = 0.2
     timeout: int = 300
-    # Reserved for later features (suggestion modes, style learning, etc.).
+    # Review customization (see critique.profiles).
+    suggestion_mode: str = "balanced"    # built-in review profile
+    project_context: Optional[str] = None    # author-provided context for the AI
+    custom_instructions: Optional[str] = None  # extra reviewer instructions
+    # Reserved for later features (style learning, etc.).
     # Stored verbatim so newer settings written by a newer CLI survive an older
     # one round-tripping the file.
     extra: Dict[str, Any] = field(default_factory=dict)

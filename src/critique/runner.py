@@ -77,12 +77,19 @@ def get_target_files(
     return [os.path.abspath(f) for f in files]
 
 
-def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
+def scan_files(
+    files: List[str],
+    use_ai: bool = True,
+    profile=None,
+    project_context=None,
+    custom_instructions=None,
+) -> List[Issue]:
     """
     Run all configured checkers on the provided file list.
 
-    When use_ai=True, appends AICriticChecker if Ollama is reachable.
-    Degrades gracefully to static-only mode if Ollama is offline.
+    When use_ai=True, appends AICriticChecker if the AI provider is reachable.
+    Degrades gracefully to static-only mode otherwise.  The active review
+    ``profile`` tunes the AI critic's tone and caching.
     """
     if not files:
         return []
@@ -100,7 +107,9 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
             from critique.checkers.ai_critic import AICriticChecker
             llm = LLMClient()
             if llm.is_available():
-                checkers.append(AICriticChecker(llm))
+                checkers.append(
+                    AICriticChecker(llm, profile, project_context, custom_instructions)
+                )
             else:
                 console.print(
                     f"[yellow]AI provider ({llm.provider_name}) unavailable — "
@@ -165,6 +174,17 @@ def run_all_checks(
     Returns True if the push is allowed (no FATAL issues), False otherwise.
     Phase 4 will swap print_report() for print_ai_report() when use_ai=True.
     """
+    # Load the active review profile + project context once for this run.
+    from critique.config import load_config
+    from critique.profiles import (
+        resolve_active_profile,
+        filter_by_min_severity,
+    )
+    cfg = load_config()
+    profile = resolve_active_profile(cfg)
+    project_context = cfg.project_context
+    custom_instructions = cfg.custom_instructions
+
     files = get_target_files(incremental, custom_files)
     if not files and incremental and not custom_files:
         return True
@@ -172,7 +192,16 @@ def run_all_checks(
         console.print("[yellow]No python files found.[/yellow]")
         return True
 
-    all_issues = scan_files(files, use_ai=use_ai)
+    all_issues = scan_files(
+        files,
+        use_ai=use_ai,
+        profile=profile,
+        project_context=project_context,
+        custom_instructions=custom_instructions,
+    )
+
+    # Apply the profile's reporting threshold (e.g. lenient mode hides nitpicks).
+    all_issues = filter_by_min_severity(all_issues, profile)
 
     if use_ai:
         try:
@@ -182,10 +211,14 @@ def run_all_checks(
             llm = LLMClient()
             if llm.is_available():
                 if all_issues:
-                    all_issues = enrich_issues(all_issues, llm)
-                synth = AISynthesizer(llm).synthesize(all_issues)
+                    all_issues = enrich_issues(
+                        all_issues, llm, profile, project_context, custom_instructions
+                    )
+                synth = AISynthesizer(
+                    llm, profile, project_context, custom_instructions
+                ).synthesize(all_issues)
                 save_report_notice(synth, all_issues)
-                return print_ai_report(synth, all_issues)
+                return print_ai_report(synth, all_issues, profile.block_severity)
             else:
                 console.print(
                     f"[yellow]AI provider ({llm.provider_name}) unavailable — "
@@ -195,4 +228,4 @@ def run_all_checks(
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
     save_report_notice(fallback_synthesis(all_issues), all_issues)
-    return print_report(all_issues)
+    return print_report(all_issues, profile.block_severity)

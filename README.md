@@ -178,6 +178,41 @@ Each issue includes:
 - **Suggested fix** — a concrete, actionable recommendation
 - **Code context** — the relevant lines from the file
 
+### Review Modes (suggestion profiles)
+
+CodeCritique can review in different "moods". A **mode** tunes the AI's tone and
+focus, which findings are surfaced, and which severities block a push — without
+changing the checkers themselves.
+
+```bash
+codecritique config modes          # list modes and what they do
+codecritique config mode strict    # switch mode
+```
+
+| Mode | Focus | Reports ≥ | Blocks push ≥ |
+|------|-------|-----------|---------------|
+| `balanced` (default) | Pragmatic; real problems only | INFO | FATAL |
+| `strict` | Zero-tolerance; flags everything | INFO | **WARNING** |
+| `lenient` | Real bugs only; hides nitpicks | WARNING | FATAL |
+| `security` | Vulnerabilities & unsafe patterns | INFO | FATAL |
+| `mentor` | Detailed, teaching tone | INFO | **NEVER** |
+| `concise` | One-line findings & fixes | INFO | FATAL |
+
+**Project context** lets you tell the reviewer about your codebase so its
+suggestions match your stack — and it becomes part of the AI cache key, so
+updating it produces fresh reviews:
+
+```bash
+codecritique config context "Async FastAPI service; prefer pydantic models."
+codecritique config set custom_instructions "We avoid global state; flag it."
+```
+
+Prefer a guided setup? Run the interactive wizard:
+
+```bash
+codecritique config wizard
+```
+
 ### Git Hooks
 
 To automate this tool, install it as a Git `pre-push` hook. This prevents pushing if any fatal issues are found.
