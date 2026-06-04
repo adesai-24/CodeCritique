@@ -185,6 +185,15 @@ def run_all_checks(
     project_context = cfg.project_context
     custom_instructions = cfg.custom_instructions
 
+    # If style learning is on and a profile exists, fold the author's learned
+    # conventions into the reviewer instructions so fixes match their habits.
+    from critique.style import style_context_for_prompts
+    style_note = style_context_for_prompts(cfg)
+    if style_note:
+        custom_instructions = (
+            f"{custom_instructions}\n\n{style_note}" if custom_instructions else style_note
+        )
+
     files = get_target_files(incremental, custom_files)
     if not files and incremental and not custom_files:
         return True
