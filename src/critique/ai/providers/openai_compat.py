@@ -92,12 +92,18 @@ class OpenAICompatibleProvider(Provider):
 
     def complete_json(self, system: str, user: str, *, schema: Optional[Dict] = None) -> str:
         client = self._get_client()
-        resp = client.chat.completions.create(
-            model=self.model,
-            messages=self._messages(system, user),
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
+        kwargs: Dict = {
+            "model": self.model,
+            "messages": self._messages(system, user),
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+        # vLLM supports schema-guided decoding: it constrains generation to the
+        # JSON schema, which is both faster (no wasted tokens) and guarantees a
+        # parseable, correctly-shaped response.
+        if self.flavor == "vllm" and schema:
+            kwargs["extra_body"] = {"guided_json": schema}
+        resp = client.chat.completions.create(**kwargs)
         return resp.choices[0].message.content or "{}"
 
     def stream(

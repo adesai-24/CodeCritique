@@ -50,9 +50,9 @@ def test_set_value_updates_typed_field(cfg_path):
 
 
 def test_set_value_unknown_key_goes_to_extra(cfg_path):
-    cfg_mod.set_value("suggestion_mode", "strict", cfg_path)
+    cfg_mod.set_value("block_severity", "WARNING", cfg_path)
     loaded = cfg_mod.load_config(cfg_path)
-    assert loaded.extra["suggestion_mode"] == "strict"
+    assert loaded.extra["block_severity"] == "WARNING"
 
 
 def test_set_value_none_clears_optional(cfg_path):

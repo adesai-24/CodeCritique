@@ -22,10 +22,18 @@ from rich.table import Table
 
 from critique import config as cfg_mod
 from critique import secrets_store
+from critique import profiles
 from critique.config import SUPPORTED_PROVIDERS
 
 console = Console()
 config_app = typer.Typer(help="View and edit CodeCritique configuration and API keys.")
+
+
+def _short(text, width: int = 60) -> str:
+    if not text:
+        return "[dim](not set)[/dim]"
+    text = " ".join(str(text).split())
+    return text if len(text) <= width else text[: width - 1] + "…"
 
 
 @config_app.command("show")
@@ -41,6 +49,9 @@ def show() -> None:
     table.add_row("base_url", str(cfg.base_url or "[dim](provider default)[/dim]"))
     table.add_row("temperature", str(cfg.temperature))
     table.add_row("timeout", str(cfg.timeout))
+    table.add_row("suggestion_mode", cfg.suggestion_mode)
+    table.add_row("project_context", _short(cfg.project_context))
+    table.add_row("custom_instructions", _short(cfg.custom_instructions))
     for key, value in (cfg.extra or {}).items():
         table.add_row(f"extra.{key}", str(value))
     console.print(table)
@@ -136,6 +147,100 @@ def delete_key(
         console.print(f"[green]Removed stored {provider} key.[/green]")
     else:
         console.print(f"[yellow]No stored key found for {provider}.[/yellow]")
+
+
+@config_app.command("modes")
+def modes() -> None:
+    """List the built-in review modes (suggestion profiles)."""
+    active = cfg_mod.load_config().suggestion_mode
+    table = Table(title="Review Modes", header_style="bold cyan")
+    table.add_column("Mode")
+    table.add_column("What it does")
+    table.add_column("Reports ≥")
+    table.add_column("Blocks push ≥")
+    for prof in profiles.list_profiles():
+        marker = " [green]●[/green]" if prof.name == active else ""
+        table.add_row(
+            prof.name + marker,
+            prof.description,
+            prof.min_report_severity,
+            prof.block_severity,
+        )
+    console.print(table)
+    console.print("[dim]Set one with: codecritique config mode <name>[/dim]")
+
+
+@config_app.command("mode")
+def mode(name: str = typer.Argument(..., help="Review mode, e.g. strict, lenient, mentor, security.")) -> None:
+    """Set the active review mode (suggestion profile)."""
+    if not profiles.is_valid_mode(name):
+        valid = ", ".join(p.name for p in profiles.list_profiles())
+        console.print(f"[red]Unknown mode '{name}'.[/red] Available: {valid}")
+        raise typer.Exit(code=1)
+    cfg_mod.set_value("suggestion_mode", name.strip().lower())
+    prof = profiles.get_profile(name)
+    console.print(f"[green]Review mode set to '{prof.name}'[/green] — {prof.description}")
+
+
+@config_app.command("context")
+def context(
+    text: Optional[str] = typer.Argument(
+        None, help="Project context for the AI reviewer. Omit with --clear to remove."
+    ),
+    clear: bool = typer.Option(False, "--clear", help="Clear the stored project context."),
+) -> None:
+    """Set the project context the AI reviewer should assume.
+
+    Example:
+        codecritique config context "Async FastAPI service; prefer pydantic models."
+    """
+    if clear:
+        cfg_mod.set_value("project_context", "none")
+        console.print("[green]Cleared project context.[/green]")
+        return
+    if not text:
+        console.print("[yellow]Provide context text, or use --clear to remove it.[/yellow]")
+        raise typer.Exit(code=2)
+    cfg_mod.set_value("project_context", text)
+    console.print("[green]Saved project context. The AI reviewer will use it on the next run.[/green]")
+
+
+@config_app.command("wizard")
+def wizard() -> None:
+    """Interactive setup: pick a provider, key, and review mode."""
+    console.print("[bold cyan]CodeCritique setup[/bold cyan]\n")
+
+    provider = typer.prompt(
+        f"Provider ({'/'.join(SUPPORTED_PROVIDERS)})",
+        default=cfg_mod.load_config().provider,
+    ).strip().lower()
+    if provider not in SUPPORTED_PROVIDERS:
+        console.print(f"[red]Unknown provider '{provider}'.[/red]")
+        raise typer.Exit(code=1)
+    cfg_mod.set_value("provider", provider)
+
+    needs_key = provider in {"gemini", "openai", "anthropic"}
+    if needs_key and not secrets_store.get_api_key(provider):
+        if typer.confirm(f"Add a {provider} API key now?", default=True):
+            key = typer.prompt(f"{provider} API key", hide_input=True)
+            if key.strip():
+                secrets_store.set_api_key(provider, key)
+                console.print(f"[green]Saved {provider} key ({secrets_store.mask_key(key)}).[/green]")
+
+    mode_names = [p.name for p in profiles.list_profiles()]
+    chosen = typer.prompt(
+        f"Review mode ({'/'.join(mode_names)})",
+        default=cfg_mod.load_config().suggestion_mode,
+    ).strip().lower()
+    if profiles.is_valid_mode(chosen):
+        cfg_mod.set_value("suggestion_mode", chosen)
+
+    if typer.confirm("Add project context for the AI reviewer?", default=False):
+        ctx = typer.prompt("Project context")
+        if ctx.strip():
+            cfg_mod.set_value("project_context", ctx)
+
+    console.print("\n[bold green]Setup complete.[/bold green] Run 'codecritique config show' to review.")
 
 
 @config_app.command("path")

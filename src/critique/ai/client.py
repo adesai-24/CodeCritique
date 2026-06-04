@@ -41,17 +41,57 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from critique.config import load_config
+from critique.config import CONFIG_DIR, load_config
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5-coder:7b"
 DEFAULT_TIMEOUT = 300
-DEFAULT_CACHE_DIR = Path.home() / ".codecritique" / "cache"
+# Honour CODECRITIQUE_HOME (via CONFIG_DIR) so cache, config, and secrets all
+# live under the same root.
+DEFAULT_CACHE_DIR = CONFIG_DIR / "cache"
 AVAILABILITY_CACHE_SECONDS = 30.0
 
 # How long Ollama should keep the model loaded after the last request.
 # Set CODECRITIQUE_KEEP_ALIVE="-1" to keep it loaded forever.
 _DEFAULT_KEEP_ALIVE = os.environ.get("CODECRITIQUE_KEEP_ALIVE", "1h")
+
+# Upper bound on generated tokens. Our JSON responses are small (a findings
+# list, a synthesis), so capping generation length is a cheap, safe speed-up
+# that prevents the model from rambling. Override/disable via env.
+_DEFAULT_NUM_PREDICT = 2048
+
+# Ollama runtime knobs that materially affect latency/throughput. All optional:
+# only sent to Ollama when the user sets the corresponding env var, so we never
+# fight Ollama's own auto-detected defaults unless asked.
+_OLLAMA_PERF_ENV = {
+    "CODECRITIQUE_NUM_CTX": "num_ctx",        # context window size
+    "CODECRITIQUE_NUM_GPU": "num_gpu",        # layers offloaded to GPU
+    "CODECRITIQUE_NUM_THREAD": "num_thread",  # CPU threads
+    "CODECRITIQUE_NUM_BATCH": "num_batch",    # prompt batch size
+}
+
+
+def _ollama_perf_options() -> Dict[str, Any]:
+    """Collect optional Ollama performance knobs from the environment."""
+    opts: Dict[str, Any] = {}
+    num_predict = os.environ.get("CODECRITIQUE_NUM_PREDICT")
+    if num_predict is not None:
+        try:
+            value = int(num_predict)
+            if value > 0:
+                opts["num_predict"] = value
+        except ValueError:
+            pass
+    else:
+        opts["num_predict"] = _DEFAULT_NUM_PREDICT
+    for env_name, opt_name in _OLLAMA_PERF_ENV.items():
+        raw = os.environ.get(env_name)
+        if raw is not None:
+            try:
+                opts[opt_name] = int(raw)
+            except ValueError:
+                pass
+    return opts
 
 # Minimum Jaccard similarity to accept a semantic cache hit.
 _SEMANTIC_THRESHOLD = 0.82
@@ -84,6 +124,28 @@ _SEM_INDEX_LOCK = threading.RLock()
 # Per-system-prompt locks for serialised access (prefix KV-cache reuse).
 _SYSTEM_LOCKS: Dict[str, threading.Lock] = {}
 _SYSTEM_LOCKS_LOCK = threading.Lock()
+
+# Lightweight cache instrumentation (per-process). Lets `codecritique cache
+# stats` and tests confirm the cache is actually doing its job.
+_CACHE_STATS = {"hits": 0, "semantic_hits": 0, "misses": 0}
+_CACHE_STATS_LOCK = threading.Lock()
+
+
+def _record(kind: str) -> None:
+    with _CACHE_STATS_LOCK:
+        _CACHE_STATS[kind] = _CACHE_STATS.get(kind, 0) + 1
+
+
+def cache_stats() -> Dict[str, int]:
+    """Return a copy of this process's cache hit/miss counters."""
+    with _CACHE_STATS_LOCK:
+        return dict(_CACHE_STATS)
+
+
+def reset_cache_stats() -> None:
+    with _CACHE_STATS_LOCK:
+        for key in _CACHE_STATS:
+            _CACHE_STATS[key] = 0
 
 
 # -------------------------------------------------------------------------
@@ -168,7 +230,10 @@ class OllamaProvider:
     def _options(self, temperature: float, system: str) -> Dict[str, Any]:
         # num_keep pins the system-prompt tokens at the front of the KV cache so
         # consecutive same-prefix requests reuse them instead of recomputing.
-        return {"temperature": temperature, "num_keep": _approx_tokens(system)}
+        # Perf knobs (num_predict/num_ctx/num_gpu/...) bound work per request.
+        opts: Dict[str, Any] = {"temperature": temperature, "num_keep": _approx_tokens(system)}
+        opts.update(_ollama_perf_options())
+        return opts
 
     def complete_text(self, system: str, user: str, *, temperature: float) -> str:
         payload = {
@@ -315,6 +380,16 @@ class LLMClient:
     @property
     def provider_name(self) -> str:
         return getattr(self.provider, "name", "unknown")
+
+    @property
+    def supports_prefix_cache(self) -> bool:
+        """Whether the backend benefits from serialised same-prefix calls.
+
+        Stateless cloud/vLLM backends return False, signalling callers (e.g. the
+        AI critic) that they can safely review chunks concurrently instead of
+        serially.
+        """
+        return getattr(self.provider, "supports_prefix_cache", False)
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -526,10 +601,12 @@ class LLMClient:
 
         cached = self._cache_get(cache_key)
         if isinstance(cached, str):
+            _record("hits")
             return cached
 
         if not self.is_available():
             raise RuntimeError(self.provider.unavailable_message())
+        _record("misses")
 
         system_hash = sha256(system.encode()).hexdigest()
         with self._maybe_system_lock(system):
@@ -574,6 +651,7 @@ class LLMClient:
 
         cached = self._cache_get(cache_key)
         if cached is not None:
+            _record("hits")
             return cached
 
         system_hash = sha256(system.encode()).hexdigest()
@@ -583,11 +661,13 @@ class LLMClient:
         if cache_key_override is None:
             sem_hit = self._sem_cache_lookup(system_hash, user)
             if sem_hit is not None:
+                _record("semantic_hits")
                 self._cache_set(cache_key, sem_hit)
                 return sem_hit
 
         if not self.is_available():
             raise RuntimeError(self.provider.unavailable_message())
+        _record("misses")
 
         with self._maybe_system_lock(system):
             cached = self._cache_get(cache_key)
@@ -600,3 +680,62 @@ class LLMClient:
         if cache_key_override is None:
             self._sem_index_add(system_hash, cache_key, user)
         return result
+
+
+# -------------------------------------------------------------------------
+# Cache inspection / maintenance (used by `codecritique cache ...`)
+# -------------------------------------------------------------------------
+
+def cache_info(cache_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """Report on-disk cache size, entry counts, and session hit/miss stats."""
+    cache_dir = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR
+    cache_path = cache_dir / "llm_cache.json"
+    sem_path = cache_dir / "semantic_index.json"
+    entries = size = buckets = 0
+    try:
+        if cache_path.exists():
+            size = cache_path.stat().st_size
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
+            entries = len(data) if isinstance(data, dict) else 0
+    except Exception:
+        pass
+    try:
+        if sem_path.exists():
+            sem = json.loads(sem_path.read_text(encoding="utf-8"))
+            buckets = len(sem) if isinstance(sem, dict) else 0
+    except Exception:
+        pass
+    return {
+        "cache_dir": str(cache_dir),
+        "entries": entries,
+        "bytes": size,
+        "semantic_buckets": buckets,
+        "stats": cache_stats(),
+    }
+
+
+def clear_cache(cache_dir: Optional[Path] = None) -> int:
+    """Delete the on-disk cache files and reset in-memory snapshots.
+
+    Returns the number of files removed.
+    """
+    global _DISK_SNAPSHOT, _DISK_SNAPSHOT_MTIME, _SEM_INDEX, _SEM_INDEX_MTIME
+    cache_dir = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR
+    removed = 0
+    for name in ("llm_cache.json", "semantic_index.json"):
+        path = cache_dir / name
+        try:
+            if path.exists():
+                path.unlink()
+                removed += 1
+        except Exception:
+            pass
+    with _MEM_CACHE_LOCK:
+        _MEM_CACHE.clear()
+    with _DISK_SNAPSHOT_LOCK:
+        _DISK_SNAPSHOT = None
+        _DISK_SNAPSHOT_MTIME = 0.0
+    with _SEM_INDEX_LOCK:
+        _SEM_INDEX = None
+        _SEM_INDEX_MTIME = 0.0
+    return removed

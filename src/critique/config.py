@@ -65,7 +65,12 @@ class CritiqueConfig:
     base_url: Optional[str] = None       # for ollama / vllm / openai-compatible
     temperature: float = 0.2
     timeout: int = 300
-    # Reserved for later features (suggestion modes, style learning, etc.).
+    # Review customization (see critique.profiles).
+    suggestion_mode: str = "balanced"    # built-in review profile
+    project_context: Optional[str] = None    # author-provided context for the AI
+    custom_instructions: Optional[str] = None  # extra reviewer instructions
+    style_learning: bool = False         # personalise fixes to the author's style
+    # Reserved for later features.
     # Stored verbatim so newer settings written by a newer CLI survive an older
     # one round-tripping the file.
     extra: Dict[str, Any] = field(default_factory=dict)
@@ -178,12 +183,20 @@ def _read_raw(path: Optional[Path] = None) -> Dict[str, Any]:
     return {}
 
 
+_TRUE_WORDS = {"on", "true", "1", "yes", "enable", "enabled"}
+_FALSE_WORDS = {"off", "false", "0", "no", "disable", "disabled"}
+
+
 def _convert_scalar(key: str, value: Any) -> Any:
     """Coerce CLI string values into the right type for typed fields."""
     if key == "temperature":
         return float(value)
     if key == "timeout":
         return int(value)
+    if key == "style_learning":
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in _TRUE_WORDS
     if key == "provider" and isinstance(value, str):
         return value.strip().lower()
     if isinstance(value, str) and value.lower() in {"none", "null", ""}:

@@ -34,6 +34,10 @@ from critique.ai.schemas import CRITIC_SCHEMA
 MAX_FILE_CHARS = 30_000
 MAX_CHUNK_CHARS = 8_000   # keep individual chunks well within context window
 _DEFAULT_AI_CRITIC_WORKERS = 2
+# Concurrency for reviewing chunks *within* a file. Only used for stateless
+# backends (cloud/vLLM); Ollama reviews chunks serially to keep its prefix KV
+# cache hot across consecutive same-system-prompt requests.
+_DEFAULT_AI_CHUNK_WORKERS = 4
 
 
 def _env_int(name: str, default: int) -> int:
@@ -139,8 +143,19 @@ class AICriticChecker(BaseChecker):
     name = "AI Critic"
     description = "Semantic review via local LLM — catches logic bugs linters miss"
 
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, profile=None, project_context=None, custom_instructions=None):
         self.llm = llm
+        self.profile = profile
+        # Bake the active review mode + project context into the system prompt
+        # once. Because this string feeds the AST cache key, different modes
+        # cache independently and switching modes never serves a stale review.
+        if profile is not None:
+            from critique.profiles import apply_profile_to_system
+            self._system = apply_profile_to_system(
+                CRITIC_SYSTEM, profile, project_context, custom_instructions
+            )
+        else:
+            self._system = CRITIC_SYSTEM
 
     def _review_chunk(
         self, chunk: str, line_offset: int, file_path: str
@@ -148,14 +163,14 @@ class AICriticChecker(BaseChecker):
         """Review a single chunk (function/class/module block) and return issues."""
         try:
             result = self.llm.complete_json(
-                system=CRITIC_SYSTEM,
+                system=self._system,
                 user=(
                     f"Review this Python code (from {file_path}, starting at line {line_offset}) "
                     "for logic bugs and correctness issues:\n\n"
                     f"```python\n{chunk}\n```"
                 ),
                 schema=CRITIC_SCHEMA,
-                cache_key_override=_ast_cache_key(chunk, CRITIC_SYSTEM),
+                cache_key_override=_ast_cache_key(chunk, self._system),
             )
             issues: List[Issue] = []
             for finding in result.get("findings", []):
@@ -198,9 +213,40 @@ class AICriticChecker(BaseChecker):
 
         chunks = _extract_chunks(source, file_path)
 
+        # Stateless backends (cloud/vLLM) gain nothing from serial review and a
+        # lot from concurrency, so fan the chunks out. Ollama stays serial to
+        # keep its shared-prefix KV cache warm between consecutive chunks.
+        prefix_cache = getattr(self.llm, "supports_prefix_cache", False)
+        if len(chunks) > 1 and not prefix_cache:
+            return self._review_chunks_concurrent(chunks, file_path)
+
         all_issues: List[Issue] = []
         for chunk_text, line_offset in chunks:
             all_issues.extend(self._review_chunk(chunk_text, line_offset, file_path))
+        return all_issues
+
+    def _review_chunks_concurrent(
+        self, chunks: List[Tuple[str, int]], file_path: str
+    ) -> List[Issue]:
+        workers = max(
+            1,
+            min(len(chunks), _env_int("CODECRITIQUE_AI_CHUNK_WORKERS", _DEFAULT_AI_CHUNK_WORKERS)),
+        )
+        results: List[List[Issue]] = [[] for _ in chunks]
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_idx = {
+                executor.submit(self._review_chunk, text, offset, file_path): i
+                for i, (text, offset) in enumerate(chunks)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception:
+                    results[idx] = []
+        all_issues: List[Issue] = []
+        for chunk_issues in results:
+            all_issues.extend(chunk_issues)
         return all_issues
 
     def run(self, files: List[str]) -> List[Issue]:
