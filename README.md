@@ -241,10 +241,52 @@ To force fresh AI responses for a run, disable the cache:
 CODECRITIQUE_AI_CACHE=0 codecritique check
 ```
 
+Inspect or clear the cache:
+
+```bash
+codecritique cache stats   # size, entry count, semantic buckets
+codecritique cache clear   # force fresh inference next run
+```
+
+### Performance tuning
+
+CodeCritique applies several optimizations automatically and exposes knobs for
+the rest:
+
+- **Adaptive concurrency** — Ollama reviews a file's functions serially to keep
+  its prefix KV-cache warm; stateless backends (Gemini/OpenAI/**vLLM**) review
+  them **in parallel** instead.
+- **vLLM guided decoding** — when using a vLLM endpoint, JSON responses are
+  generated with `guided_json` schema constraints (faster + always parseable).
+- **Bounded generation** — responses are capped (`num_predict`, default 2048)
+  so the model never rambles.
+
+Ollama runtime knobs (only sent when you set them):
+
+```bash
+CODECRITIQUE_NUM_PREDICT=1024 \  # cap generated tokens (speed)
+CODECRITIQUE_NUM_CTX=8192 \      # context window
+CODECRITIQUE_NUM_GPU=99 \        # layers offloaded to the GPU
+CODECRITIQUE_NUM_THREAD=8 \      # CPU threads
+codecritique check
+```
+
 You can also tune concurrency when a machine has limited CPU or memory:
 
 ```bash
-CODECRITIQUE_CHECKER_WORKERS=2 CODECRITIQUE_AI_CRITIC_WORKERS=1 codecritique check
+CODECRITIQUE_CHECKER_WORKERS=2 \
+CODECRITIQUE_AI_CRITIC_WORKERS=1 \
+CODECRITIQUE_AI_CHUNK_WORKERS=4 \
+codecritique check
+```
+
+**Fastest local setup:** for big speedups over Ollama on the same hardware, run
+a [vLLM](https://docs.vllm.ai) server (continuous batching + paged KV cache) and
+point CodeCritique at it:
+
+```bash
+codecritique config set provider vllm
+codecritique config set base_url http://localhost:8000/v1
 ```
 
 ## Configuration

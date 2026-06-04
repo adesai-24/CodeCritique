@@ -10,9 +10,11 @@ from critique.runner import run_all_checks
 from critique.git_utils import install_pre_push_hook
 from critique.persistence import list_reports, load_report
 from critique.config_cli import config_app
+from critique.cache_cli import cache_app
 
 app = typer.Typer(help="CodeCritique: A pre-push quality gate for your code.")
 app.add_typer(config_app, name="config")
+app.add_typer(cache_app, name="cache")
 console = Console()
 
 @app.command()
