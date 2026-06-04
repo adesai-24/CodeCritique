@@ -34,6 +34,10 @@ from critique.ai.schemas import CRITIC_SCHEMA
 MAX_FILE_CHARS = 30_000
 MAX_CHUNK_CHARS = 8_000   # keep individual chunks well within context window
 _DEFAULT_AI_CRITIC_WORKERS = 2
+# Concurrency for reviewing chunks *within* a file. Only used for stateless
+# backends (cloud/vLLM); Ollama reviews chunks serially to keep its prefix KV
+# cache hot across consecutive same-system-prompt requests.
+_DEFAULT_AI_CHUNK_WORKERS = 4
 
 
 def _env_int(name: str, default: int) -> int:
@@ -209,9 +213,40 @@ class AICriticChecker(BaseChecker):
 
         chunks = _extract_chunks(source, file_path)
 
+        # Stateless backends (cloud/vLLM) gain nothing from serial review and a
+        # lot from concurrency, so fan the chunks out. Ollama stays serial to
+        # keep its shared-prefix KV cache warm between consecutive chunks.
+        prefix_cache = getattr(self.llm, "supports_prefix_cache", False)
+        if len(chunks) > 1 and not prefix_cache:
+            return self._review_chunks_concurrent(chunks, file_path)
+
         all_issues: List[Issue] = []
         for chunk_text, line_offset in chunks:
             all_issues.extend(self._review_chunk(chunk_text, line_offset, file_path))
+        return all_issues
+
+    def _review_chunks_concurrent(
+        self, chunks: List[Tuple[str, int]], file_path: str
+    ) -> List[Issue]:
+        workers = max(
+            1,
+            min(len(chunks), _env_int("CODECRITIQUE_AI_CHUNK_WORKERS", _DEFAULT_AI_CHUNK_WORKERS)),
+        )
+        results: List[List[Issue]] = [[] for _ in chunks]
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_idx = {
+                executor.submit(self._review_chunk, text, offset, file_path): i
+                for i, (text, offset) in enumerate(chunks)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception:
+                    results[idx] = []
+        all_issues: List[Issue] = []
+        for chunk_issues in results:
+            all_issues.extend(chunk_issues)
         return all_issues
 
     def run(self, files: List[str]) -> List[Issue]:
