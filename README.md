@@ -213,6 +213,37 @@ Prefer a guided setup? Run the interactive wizard:
 codecritique config wizard
 ```
 
+### Style Learning (personalised suggestions)
+
+CodeCritique can learn *your* coding habits and tailor its suggested fixes so
+they read like something you'd write — instead of generic advice.
+
+```bash
+codecritique style enable        # turn it on
+codecritique style learn         # analyse your code (defaults to the current dir)
+codecritique style show          # see what was learned
+codecritique style disable       # turn it off (keeps the profile)
+```
+
+**How it works (no fine-tuning, nothing leaves your machine):** `style learn`
+statically analyses your existing Python — quote style, type-hint and docstring
+coverage, f-string usage, naming case, typical function length and line width —
+and saves a small JSON profile at `~/.codecritique/style_profile.json`. When
+enabled, a concise summary of that profile is injected into the AI reviewer's
+context (a form of in-context conditioning), so its fixes match your conventions.
+
+Example of what gets learned and injected:
+
+```
+- Prefer double quotes for strings.
+- Use snake_case for function and variable names.
+- Include type hints on function parameters and return values.
+- Use f-strings for string formatting.
+- Keep functions around 20 lines, matching the existing style.
+```
+
+Re-run `codecritique style learn` whenever your conventions evolve.
+
 ### Git Hooks
 
 To automate this tool, install it as a Git `pre-push` hook. This prevents pushing if any fatal issues are found.
