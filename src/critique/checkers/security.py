@@ -8,9 +8,10 @@ class BanditChecker(BaseChecker):
     description = "Common security issues finder."
 
     def run(self, files: List[str]) -> List[Issue]:
+        files = [f for f in files if f.endswith((".py", ".pyi"))]
         if not files:
             return []
-        
+
         issues = []
         try:
             cmd = ["bandit", "-f", "json", "-q"] + files
