@@ -25,14 +25,24 @@ def check(
     files: Optional[list[str]] = typer.Argument(None, help="Specific files to check."),
     incremental: bool = typer.Option(True, help="Only check changed files (git diff)."),
     ai: bool = typer.Option(True, help="Use AI Critic + enrichment + synthesis (requires Ollama)."),
+    learn: Optional[bool] = typer.Option(
+        None,
+        "--learn/--no-learn",
+        help="Adaptively update your style profile from the reviewed files "
+        "(overrides the 'style auto' setting for this run).",
+    ),
 ):
     """
     Run all configured checks (Lint, Types, Security, AI Review).
 
     Pass --no-ai to skip AI features and use fast static-only mode.
-    Ollama must be running for AI features: ollama serve
+    Pass --learn to nudge your coding-style profile from the files reviewed
+    this run (see also `codecritique style auto`). Ollama must be running for
+    AI features: ollama serve
     """
-    success = run_all_checks(incremental=incremental, custom_files=files, use_ai=ai)
+    success = run_all_checks(
+        incremental=incremental, custom_files=files, use_ai=ai, learn=learn
+    )
     if not success:
         typer.echo("Checks failed. Fix the issues or use --no-verify to bypass (not recommended).")
         raise typer.Exit(code=1)

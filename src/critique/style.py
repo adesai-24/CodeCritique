@@ -307,6 +307,80 @@ def clear_profile(path: Optional[Path] = None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Adaptive (incremental) learning — "learn as you review"
+# ---------------------------------------------------------------------------
+
+# Exponential-moving-average weight for a single ``check`` batch. Deliberately
+# small: each run only *nudges* the profile toward what it just saw, so a
+# handful of changed files can never overwrite an established style. This is the
+# core guard against overtraining on the latest diff.
+DEFAULT_LEARN_RATE = 0.15
+
+
+def _ema(old: float, new: float, alpha: float, ndigits: int = 3) -> float:
+    return round((1.0 - alpha) * old + alpha * new, ndigits)
+
+
+def merge_profiles(
+    existing: StyleProfile,
+    batch: StyleProfile,
+    alpha: float = DEFAULT_LEARN_RATE,
+) -> StyleProfile:
+    """Nudge ``existing`` toward ``batch`` using an exponential moving average.
+
+    Ratios are blended (so one batch can't dominate — anti-overtraining), while
+    the ``files_analyzed`` / ``functions`` counters accumulate so the profile
+    reflects everything observed over time. Sample names are refreshed from the
+    most recent batch. Returns ``existing`` unchanged when the batch carries no
+    usable signal.
+    """
+    if batch.functions == 0:
+        return existing
+    a = max(0.0, min(1.0, alpha))
+    return StyleProfile(
+        files_analyzed=existing.files_analyzed + batch.files_analyzed,
+        functions=existing.functions + batch.functions,
+        double_quote_ratio=_ema(existing.double_quote_ratio, batch.double_quote_ratio, a),
+        type_hint_ratio=_ema(existing.type_hint_ratio, batch.type_hint_ratio, a),
+        docstring_ratio=_ema(existing.docstring_ratio, batch.docstring_ratio, a),
+        fstring_ratio=_ema(existing.fstring_ratio, batch.fstring_ratio, a),
+        snake_case_ratio=_ema(existing.snake_case_ratio, batch.snake_case_ratio, a),
+        avg_function_length=(
+            _ema(existing.avg_function_length, batch.avg_function_length, a, 1)
+            if existing.avg_function_length else batch.avg_function_length
+        ),
+        typical_line_length=(
+            int(round(_ema(existing.typical_line_length, batch.typical_line_length, a, 1)))
+            if existing.typical_line_length else batch.typical_line_length
+        ),
+        comment_density=_ema(existing.comment_density, batch.comment_density, a),
+        samples=batch.samples or existing.samples,
+    )
+
+
+def learn_incrementally(
+    paths: Optional[List[str]] = None,
+    alpha: float = DEFAULT_LEARN_RATE,
+    path: Optional[Path] = None,
+) -> Optional[StyleProfile]:
+    """Analyse ``paths`` and fold the result into the saved profile via EMA.
+
+    This is the engine behind "learn as you review": call it after a ``check``
+    run with the files that were just reviewed. The first ever call (no saved
+    profile yet) simply seeds the profile from the batch. Returns the updated
+    profile, or ``None`` when the batch had no Python functions to learn from.
+    Never raises on a bad path.
+    """
+    batch = analyze_paths(paths)
+    if batch.files_analyzed == 0 or batch.functions == 0:
+        return None
+    existing = load_profile(path)
+    updated = merge_profiles(existing, batch, alpha) if existing is not None else batch
+    save_profile(updated, path)
+    return updated
+
+
+# ---------------------------------------------------------------------------
 # Integration helper
 # ---------------------------------------------------------------------------
 

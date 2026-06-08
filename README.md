@@ -21,7 +21,8 @@ It reviews **Python** and **C/C++** out of the box.
 9. [Style learning](#9-style-learning)
 10. [Saved reports & chat](#10-saved-reports--chat)
 11. [Caching & performance](#11-caching--performance)
-12. [Configuration reference](#12-configuration-reference)
+12. [Where to tweak the AI](#12-where-to-tweak-the-ai)
+13. [Configuration reference](#13-configuration-reference)
 
 ---
 
@@ -165,6 +166,7 @@ codecritique check                       # review changed files on this branch
 codecritique check src/app.py tests/...  # review specific files
 codecritique check --no-incremental      # review the whole repo
 codecritique check --no-ai               # static analysis only
+codecritique check --learn               # also adapt your style profile (see §9)
 
 codecritique install-hooks               # install the Git pre-push hook
 codecritique format                      # reshape code for review (see §8)
@@ -296,7 +298,7 @@ read like something you'd write.
 ```bash
 codecritique style enable        # turn it on
 codecritique style learn         # analyze your code (defaults to current dir)
-codecritique style show          # see what was learned
+codecritique style show          # see what was learned (and adaptive state)
 codecritique style disable       # turn it off (keeps the profile)
 ```
 
@@ -306,6 +308,27 @@ coverage, f-string usage, naming case, typical function length and line width �
 and saves a small JSON profile at `~/.codecritique/style_profile.json`. When
 enabled, a concise summary is injected into the reviewer's context so its fixes
 match your conventions. Re-run `style learn` whenever your conventions evolve.
+
+### Learn as you review (adaptive, optional)
+
+Instead of re-running `style learn` by hand, let the profile keep adapting on
+its own — every `codecritique check` learns a little from the files it just
+reviewed:
+
+```bash
+codecritique style auto on       # learn a little from every check (persistent)
+codecritique style auto off      # stop
+codecritique check --learn       # learn just for this one run
+codecritique check --no-learn    # skip learning for this one run
+```
+
+**Won't it overtrain?** No — that's the whole point of making it optional and
+gradual. It's **off by default**, and when on, each run only *nudges* the
+profile using an exponential moving average (learning rate ≈ 0.15). A single
+odd diff can't flip your established conventions; the profile drifts slowly
+toward your real, current habits over many reviews. Counters accumulate so
+`style show` reflects everything seen over time. (Learning analyzes Python; C/C++
+files in a run are skipped for the profile.)
 
 ---
 
@@ -365,7 +388,47 @@ codecritique config set base_url http://localhost:8000/v1
 
 ---
 
-## 12. Configuration reference
+## 12. Where to tweak the AI
+
+Everything that shapes the reviewer lives in **one place: `~/.codecritique/`**
+(your home directory). There is no separate "skill file" system — you steer the
+AI through config values and the prompt templates below. Relocate the whole
+directory by setting `CODECRITIQUE_HOME=/some/path`.
+
+| Path | What it controls | How to edit |
+|------|------------------|-------------|
+| `~/.codecritique/config.json` | Provider, model, review **mode**, **project context**, **custom instructions**, style/adaptive toggles | `codecritique config ...` (preferred) or edit the JSON |
+| `~/.codecritique/style_profile.json` | Your learned coding style injected into reviews | `codecritique style learn` / `style auto` (or edit the JSON) |
+| `~/.codecritique/secrets.env` | API keys (`0600`, git-ignored) | `codecritique config set-key <provider>` |
+| `~/.codecritique/reports/` | Saved review reports (JSON) | `codecritique list` / `chat` |
+| `~/.codecritique/cache/` | AI response cache | `codecritique cache stats` / `clear` |
+
+**The two knobs you'll use most** — natural-language context the AI sees on
+every review:
+
+```bash
+codecritique config context "Async FastAPI service; prefer pydantic models."
+codecritique config set custom_instructions "We avoid global state; flag it."
+codecritique config show          # see everything that's currently set
+```
+
+**Prompt templates (advanced).** The actual system prompts for each AI stage —
+critic, enricher, formatter, synthesizer — live in the installed package at
+`critique/ai/prompts.py` (`CRITIC_SYSTEM`, `ENRICHER_SYSTEM`,
+`BATCH_ENRICHER_SYSTEM`, `FORMATTER_SYSTEM`, `SYNTHESIZER_SYSTEM`). Find the file
+on your machine with:
+
+```bash
+python -c "import critique.ai.prompts as p; print(p.__file__)"
+```
+
+Editing those changes the AI's base behavior for everyone using that install —
+prefer `config context` / `custom_instructions` for project-specific tweaks, and
+reserve prompt edits for a contributor clone.
+
+---
+
+## 13. Configuration reference
 
 **Defaults:**
 
@@ -375,6 +438,7 @@ codecritique config set base_url http://localhost:8000/v1
 - Local model: `qwen2.5-coder:7b`; Ollama URL: `http://localhost:11434`
 - AI cache: enabled
 - Saved report limit: 50
+- Style learning / adaptive ("learn as you review"): both off
 
 Configuration lives in `~/.codecritique/config.json` (managed via
 `codecritique config`). Environment overrides take highest precedence — handy

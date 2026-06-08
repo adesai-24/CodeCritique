@@ -4,6 +4,12 @@ All notable changes to CodeCritique will be documented in this file.
 
 ## 0.1.0 - Unreleased
 
+- **Adaptive style learning ("learn as you review")**: opt-in mode where every
+  `codecritique check` nudges your saved style profile toward the files it just
+  reviewed, so suggestions keep matching your evolving habits. Off by default;
+  enable per-run with `check --learn` or persistently with `codecritique style
+  auto on`. Updates are EMA-blended (learning rate ≈ 0.15) so a single diff
+  can't overtrain or flip established conventions.
 - **Removed the web demo**: CodeCritique is now CLI-only. The FastAPI + Monaco
   browser UI (and its `[web]` optional dependencies) has been dropped to keep
   the tool focused on the local, pre-push review workflow.

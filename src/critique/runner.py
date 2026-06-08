@@ -172,6 +172,7 @@ def run_all_checks(
     incremental: bool = True,
     custom_files: Optional[List[str]] = None,
     use_ai: bool = True,
+    learn: Optional[bool] = None,
 ) -> bool:
     """
     Orchestrate the full check pipeline.
@@ -213,6 +214,24 @@ def run_all_checks(
         project_context=project_context,
         custom_instructions=custom_instructions,
     )
+
+    # "Learn as you review": optionally fold the files we just looked at into
+    # the author's style profile so it keeps adapting. Off by default; opt in
+    # per-run with --learn or persistently via `codecritique style auto on`.
+    # EMA-blended so a single run can't overtrain the profile.
+    do_learn = cfg.adaptive_style if learn is None else learn
+    if do_learn:
+        try:
+            from critique.style import learn_incrementally
+            updated = learn_incrementally(files)
+            if updated is not None:
+                console.print(
+                    "[dim]Adaptive style: nudged your profile from "
+                    f"{len(files)} file(s) (now reflects {updated.functions} "
+                    "function(s) seen over time).[/dim]"
+                )
+        except Exception as exc:
+            console.print(f"[yellow]Adaptive style learning skipped: {exc}[/yellow]")
 
     # Apply the profile's reporting threshold (e.g. lenient mode hides nitpicks).
     all_issues = filter_by_min_severity(all_issues, profile)
