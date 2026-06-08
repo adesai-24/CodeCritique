@@ -1,11 +1,42 @@
 # CodeCritique
 
-CodeCritique is a local development tool designed to evaluate your code before you push it to a GitHub repository. It acts as a final check to ensure code quality by integrating static analysis tools and a local AI reviewer into a single, unified feedback loop.
+CodeCritique is an AI-assisted local code review tool for Python projects. It combines static analysis, optional local or cloud AI synthesis, saved review history, and a browser demo into one workflow you can run before pushing code.
 
 It supports **Python** and **C/C++** out of the box.
 
 ## Features
 
+- **Integrated linting**: Runs Ruff for style, import, and correctness checks.
+- **Type checking**: Runs Mypy for static type analysis.
+- **Security auditing**: Runs Bandit for common Python security vulnerabilities.
+- **Coverage checks**: Reads Coverage.py data and warns when total coverage falls below the default threshold.
+- **Incremental checking**: By default, reviews only changed Python files from the current Git branch.
+- **Severity levels**: Buckets findings as `FATAL`, `WARNING`, or `INFO`; fatal issues block the CLI check.
+- **Local AI critic**: Uses Ollama with `qwen2.5-coder:7b` to catch logic bugs and design issues static tools can miss.
+- **AI enrichment**: Adds plain-English reasoning and concrete suggested fixes to checker findings.
+- **AI synthesis**: Produces a prioritized review with a summary, fix-first recommendation, severity groups, and positive observations.
+- **Saved reports**: Stores recent review reports locally and lets you list them or chat with a saved report.
+- **Performance optimizations**: Runs independent checkers concurrently, chunks AI reviews by function/class, batches AI enrichment, and caches AI responses.
+- **Web demo**: Serves a FastAPI + Monaco browser UI where users can paste Python or import a single GitHub file and stream review results.
+
+## Requirements
+
+- Python 3.10, 3.11, or 3.12
+- Git, for incremental checks and hook installation
+- Optional for local AI: [Ollama](https://ollama.com) with `qwen2.5-coder:7b`
+- Optional for web cloud synthesis: an Anthropic API key and the web dependencies
+
+## Installation
+
+Clone the repository and install the CLI:
+
+```bash
+git clone https://github.com/adesai-24/CodeCritique.git
+cd CodeCritique
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -e .
+```
 - **Multi-language**: Reviews **Python** and **C/C++** (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, …). File selection (incremental and full-scan) detects supported languages automatically.
 - **Integrated Linting**: Uses `Ruff` for Python style and error checking.
 - **Type Checking**: Uses `Mypy` for static type analysis.
@@ -102,105 +133,108 @@ critic still reviews your C/C++ files, and Python checks are unaffected.
 
 The local AI path requires [Ollama](https://ollama.com) running with the `qwen2.5-coder:7b` model pulled.
 
-1. **Install Ollama** — download from [ollama.com](https://ollama.com) or via the installer for your platform.
+Install development or web extras when needed:
 
-2. **Start the Ollama server**:
+```bash
+pip install -e ".[dev]"
+pip install -e ".[web]"
+```
 
-   ```bash
-   ollama serve
-   ```
+The package installs both `codecritique` and the legacy `critique` command.
 
-3. **Pull the model** (one-time, ~4 GB download):
+## CLI Usage
 
-   ```bash
-   ollama pull qwen2.5-coder:7b
-   ```
-
-If Ollama is not running when you invoke `critique`, the AI stages are skipped automatically and the tool falls back to the standard static-analysis report — no crash, no manual flag needed.
-
-## Installation
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone https://github.com/yourusername/CodeCritique.git
-   cd CodeCritique
-   ```
-
-2. **Set up a virtual environment**:
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-3. **Install CodeCritique**:
-   ```bash
-   pip install -e .
-   ```
-
-Supported Python versions: 3.10 through 3.12.
-
-## Usage
-
-### Manual Check
-
-Run the critique on only your modified files (AI enabled by default):
+Run the default incremental review. AI is enabled by default and skipped automatically if Ollama is not reachable:
 
 ```bash
 codecritique check
 ```
 
-Run on specific files:
+Review specific files:
 
 ```bash
-codecritique check path/to/file.py
+codecritique check src/app.py tests/test_app.py
 ```
 
-Run a full scan of all Python files in the repository:
+Scan all Python files in the repository:
 
 ```bash
 codecritique check --no-incremental
 ```
 
-Run with AI features disabled (static analysis only, no Ollama required):
+Run static analysis only:
 
 ```bash
 codecritique check --no-ai
 ```
 
-### AI Report Output
+Install the Git pre-push hook:
 
-When Ollama is running, `critique check` produces a curated AI report instead of a raw issue list:
-
-```
-+-------------------------- CodeCritique AI Review ---------------------------+
-| Found 3 issue(s). Review the list below.                                    |
-+-----------------------------------------------------------------------------+
-
-+-------------------------------- !! Priority --------------------------------+
-| Fix First: src/app.py:42 - Unhandled None return                            |
-+-----------------------------------------------------------------------------+
-
-------------------------------------------------------------
-  CRITICAL - Must Fix
-------------------------------------------------------------
-
-  Unhandled None return  (AI)
-  src/app.py:42
-  get_user() can return None when the user is not found, but the caller
-  dereferences the result without checking.
-  Fix: Add `if user is None: return` before line 43.
-
-BLOCKED: Fix 2 critical issue(s) before pushing.
+```bash
+codecritique install-hooks
 ```
 
-Each issue includes:
-- **Source** — which checker flagged it (`AI`, `ruff`, `bandit`, etc.)
-- **Reasoning** — plain-English explanation from the AI Enricher
-- **Suggested fix** — a concrete, actionable recommendation
-- **Code context** — the relevant lines from the file
+The hook runs `codecritique check --incremental` before every push. Git cancels the push if CodeCritique returns fatal findings. You can still bypass hooks with `git push --no-verify`, but that should be rare.
 
+## Local AI Setup
+
+Install and start Ollama, then pull the default model:
+
+```bash
+ollama serve
+ollama pull qwen2.5-coder:7b
+```
+
+When Ollama is running, the CLI adds three AI stages:
+
+1. The AI critic reviews Python code for semantic bugs.
+2. The AI enricher explains checker findings and suggests fixes.
+3. The AI synthesizer builds the final prioritized report.
+
+If Ollama is offline, CodeCritique falls back to static analysis and still saves a report.
+
+## Saved Reports And Chat
+
+Each CLI run saves a compact JSON report under:
+
+```text
+~/.codecritique/reports
+```
+
+Only the 50 most recent reports are kept. List saved reports:
+
+```bash
+codecritique list
+```
+
+Chat with the latest report:
+
+```bash
+codecritique chat --last
+```
+
+Chat with a specific report ID:
+
+```bash
+codecritique chat rev_abc123
+```
+
+Report chat uses local Ollama streaming completions and answers from the saved findings, file paths, line numbers, reasoning, and suggested fixes.
+
+## AI Caching And Performance
+
+CodeCritique caches local AI responses under:
+
+```text
+~/.codecritique/cache
+```
+
+The cache includes:
+
+- An in-memory cache for the current process.
+- A disk cache in `llm_cache.json`.
+- A semantic index in `semantic_index.json` for near-duplicate prompts.
+- AST-derived cache keys for AI critic chunks, so comment and whitespace-only edits can reuse prior results.
 ### Code Formatting (review-ready layout)
 
 `codecritique format` rewrites your code into a clean, consistent layout so it's
@@ -294,32 +328,53 @@ Re-run `codecritique style learn` whenever your conventions evolve.
 
 ### Git Hooks
 
-To automate this tool, install it as a Git `pre-push` hook. This prevents pushing if any fatal issues are found.
-
-```bash
-codecritique install-hooks
-```
-
-## Git Hooks Explained
-
-The `install-hooks` command creates a script in `.git/hooks/pre-push`.
-
-Each time you run `git push`, your computer automatically runs `critique check --incremental` first. If the tool finds critical issues (like a syntax error or security hole), it returns a failure code to Git, which cancels your push. This ensures that only high-quality, verified code reaches your remote repository.
-
-When Ollama is running, the pre-push hook also runs the full AI pipeline. If Ollama is offline, the hook falls back to static-analysis-only mode without any extra configuration.
-
-## AI Caching
-
-AI reviews are slower than static checks because the model has to read the prompt, process code context, generate structured JSON, and return it over the local Ollama API. CodeCritique caches deterministic AI responses under `~/.codecritique/cache/llm_cache.json`, keyed by the model, prompt, schema, and generation options.
-
-That means the first AI review of a file or finding can still take a while, but repeated checks of unchanged code can reuse the cached critic, enrichment, and synthesis output instead of calling the model again. If the code, prompt, model, or schema changes, CodeCritique automatically misses the cache and asks the model for a fresh result.
-
-To force fresh AI responses for a run, disable the cache:
+Disable AI caching for one run:
 
 ```bash
 CODECRITIQUE_AI_CACHE=0 codecritique check
 ```
 
+Tune concurrency on smaller machines:
+
+```bash
+CODECRITIQUE_CHECKER_WORKERS=2 CODECRITIQUE_AI_CRITIC_WORKERS=1 codecritique check
+```
+
+Keep the Ollama model loaded for a custom duration:
+
+```bash
+CODECRITIQUE_KEEP_ALIVE=30m codecritique check
+```
+
+Use `CODECRITIQUE_KEEP_ALIVE=-1` to ask Ollama to keep the model loaded indefinitely.
+
+## Web Demo
+
+The web demo provides a browser-based review flow with:
+
+- Monaco editor for pasted Python.
+- Sample clean, bug-prone, security, and type-error snippets.
+- GitHub file import for `github.com/.../blob/...`, `raw.githubusercontent.com`, and raw Gist URLs.
+- SSE progress events for Ruff, Bandit, Mypy, synthesis, issues, and completion.
+- Rate limiting for review and GitHub fetch endpoints.
+- AI status detection for Anthropic and Ollama.
+
+Install web dependencies:
+
+```bash
+pip install -e ".[web]"
+```
+
+Start the server:
+
+```bash
+uvicorn web.main:app --reload --port 8000
+```
+
+On Windows, you can also run:
+
+```powershell
+.\web\start.ps1
 Inspect or clear the cache:
 
 ```bash
@@ -368,9 +423,34 @@ codecritique config set provider vllm
 codecritique config set base_url http://localhost:8000/v1
 ```
 
+Then open:
+
+```text
+http://localhost:8000
+```
+
+The web API exposes:
+
+- `GET /api/health`
+- `POST /api/github-file`
+- `POST /api/review`
+
+For synthesis, the web app prefers Anthropic when `ANTHROPIC_API_KEY` is set. Otherwise it tries local Ollama. If neither is available, it returns static-analysis results with a fallback summary.
+
 ## Configuration
 
-Currently, the tool uses default configurations for the underlying tools:
+Current defaults:
+
+- Coverage threshold: 80%
+- Incremental base: `origin/main`
+- Local AI model: `qwen2.5-coder:7b`
+- Ollama URL: `http://localhost:11434`
+- AI cache: enabled by default
+- Saved report limit: 50 reports
+
+CodeCritique does not yet read a project config file. A future version may add `critique.toml` for thresholds, rule exclusions, model settings, and other project-specific options.
+
+## Testing
 
 - **Coverage**: Hardcoded threshold of 80%.
 - **Linter**: Uses the default Ruff configuration.
