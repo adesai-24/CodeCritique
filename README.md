@@ -21,8 +21,7 @@ It reviews **Python** and **C/C++** out of the box.
 9. [Style learning](#9-style-learning)
 10. [Saved reports & chat](#10-saved-reports--chat)
 11. [Caching & performance](#11-caching--performance)
-12. [Web demo](#12-web-demo)
-13. [Configuration reference](#13-configuration-reference)
+12. [Configuration reference](#12-configuration-reference)
 
 ---
 
@@ -44,8 +43,6 @@ It reviews **Python** and **C/C++** out of the box.
   or a self-hosted vLLM endpoint. Switch with one command.
 - **Saved reports + chat** — every run is saved locally; list past reports or
   chat with one to dig into findings.
-- **Web demo** — a FastAPI + Monaco browser UI for pasting code or importing a
-  single GitHub file with streamed results.
 
 ---
 
@@ -129,11 +126,10 @@ Add extras to the same single-line install (here with pipx; for a plain venv use
 
 ```bash
 pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git"  # Gemini / OpenAI / Anthropic / vLLM SDKs
-pipx install "codecritique[web]   @ git+https://github.com/adesai-24/CodeCritique.git"  # the browser demo
 ```
 
-From a clone you can use the shorthand `pip install -e ".[cloud]"`,
-`".[web]"`, or `".[dev]"`.
+From a clone you can use the shorthand `pip install -e ".[cloud]"` or
+`".[dev]"`.
 
 To use the AI stages, add a provider key next — see
 [AI providers & API keys](#6-ai-providers--api-keys). Without a key (and without
@@ -369,34 +365,7 @@ codecritique config set base_url http://localhost:8000/v1
 
 ---
 
-## 12. Web demo
-
-A browser-based review flow: Monaco editor, sample snippets, GitHub/raw-Gist
-file import, streamed SSE progress, and AI-status detection.
-
-The web demo is served from a clone of the repo. Install the `[web]` extra and
-run the server from the repo root:
-
-```bash
-git clone https://github.com/adesai-24/CodeCritique.git
-cd CodeCritique && pip install -e ".[web]"
-uvicorn web.main:app --reload --port 8000
-# Windows: .\web\start.ps1
-```
-
-Then open <http://localhost:8000>. The API exposes:
-
-- `GET /api/health`
-- `POST /api/github-file`
-- `POST /api/review`
-
-For synthesis the web app prefers Anthropic when `ANTHROPIC_API_KEY` is set,
-otherwise it tries local Ollama, and finally falls back to static-analysis
-results with a summary.
-
----
-
-## 13. Configuration reference
+## 12. Configuration reference
 
 **Defaults:**
 
