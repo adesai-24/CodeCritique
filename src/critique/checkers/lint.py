@@ -8,9 +8,10 @@ class RuffChecker(BaseChecker):
     description = "Fast Python linter."
 
     def run(self, files: List[str]) -> List[Issue]:
+        files = [f for f in files if f.endswith((".py", ".pyi"))]
         if not files:
             return []
-        
+
         issues = []
         try:
             cmd = ["ruff", "check", "--output-format=json"] + files

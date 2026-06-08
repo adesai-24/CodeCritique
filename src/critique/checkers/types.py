@@ -8,9 +8,10 @@ class MypyChecker(BaseChecker):
     description = "Static type checker."
 
     def run(self, files: List[str]) -> List[Issue]:
+        files = [f for f in files if f.endswith((".py", ".pyi"))]
         if not files:
             return []
-        
+
         issues = []
         try:
             cmd = ["mypy", "--show-column-numbers", "--no-error-summary"] + files

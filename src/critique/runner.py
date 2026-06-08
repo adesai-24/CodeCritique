@@ -13,6 +13,7 @@ from critique.checkers.lint import RuffChecker
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
+from critique.checkers.cpp import CppcheckChecker
 from critique.report import print_report, print_ai_report
 from critique.persistence import fallback_synthesis, save_report
 
@@ -67,22 +68,32 @@ def get_target_files(
     if incremental:
         files = get_changed_files()
         if not files:
-            console.print("[bold green]No python files changed. Skipping checks.[/bold green]")
+            console.print("[bold green]No supported files changed. Skipping checks.[/bold green]")
             return []
         console.print(f"[bold blue]Checking {len(files)} changed file(s)...[/bold blue]")
         return files
 
-    files = glob.glob("**/*.py", recursive=True)
+    from critique.languages import SUPPORTED_EXTENSIONS
+    files = []
+    for ext in SUPPORTED_EXTENSIONS:
+        files.extend(glob.glob(f"**/*{ext}", recursive=True))
     files = [f for f in files if "site-packages" not in f and "venv" not in f and ".venv" not in f]
     return [os.path.abspath(f) for f in files]
 
 
-def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
+def scan_files(
+    files: List[str],
+    use_ai: bool = True,
+    profile=None,
+    project_context=None,
+    custom_instructions=None,
+) -> List[Issue]:
     """
     Run all configured checkers on the provided file list.
 
-    When use_ai=True, appends AICriticChecker if Ollama is reachable.
-    Degrades gracefully to static-only mode if Ollama is offline.
+    When use_ai=True, appends AICriticChecker if the AI provider is reachable.
+    Degrades gracefully to static-only mode otherwise.  The active review
+    ``profile`` tunes the AI critic's tone and caching.
     """
     if not files:
         return []
@@ -92,6 +103,7 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
         BanditChecker(),
         MypyChecker(),
         CoverageChecker(),
+        CppcheckChecker(),
     ]
 
     if use_ai:
@@ -100,11 +112,13 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
             from critique.checkers.ai_critic import AICriticChecker
             llm = LLMClient()
             if llm.is_available():
-                checkers.append(AICriticChecker(llm))
+                checkers.append(
+                    AICriticChecker(llm, profile, project_context, custom_instructions)
+                )
             else:
                 console.print(
-                    "[yellow]Ollama not reachable — skipping AI Critic. "
-                    "Start it with: ollama serve[/yellow]"
+                    f"[yellow]AI provider ({llm.provider_name}) unavailable — "
+                    f"skipping AI Critic. {llm.unavailable_message()}[/yellow]"
                 )
         except Exception as exc:
             console.print(f"[yellow]AI Critic unavailable: {exc}[/yellow]")
@@ -165,6 +179,26 @@ def run_all_checks(
     Returns True if the push is allowed (no FATAL issues), False otherwise.
     Phase 4 will swap print_report() for print_ai_report() when use_ai=True.
     """
+    # Load the active review profile + project context once for this run.
+    from critique.config import load_config
+    from critique.profiles import (
+        resolve_active_profile,
+        filter_by_min_severity,
+    )
+    cfg = load_config()
+    profile = resolve_active_profile(cfg)
+    project_context = cfg.project_context
+    custom_instructions = cfg.custom_instructions
+
+    # If style learning is on and a profile exists, fold the author's learned
+    # conventions into the reviewer instructions so fixes match their habits.
+    from critique.style import style_context_for_prompts
+    style_note = style_context_for_prompts(cfg)
+    if style_note:
+        custom_instructions = (
+            f"{custom_instructions}\n\n{style_note}" if custom_instructions else style_note
+        )
+
     files = get_target_files(incremental, custom_files)
     if not files and incremental and not custom_files:
         return True
@@ -172,7 +206,16 @@ def run_all_checks(
         console.print("[yellow]No python files found.[/yellow]")
         return True
 
-    all_issues = scan_files(files, use_ai=use_ai)
+    all_issues = scan_files(
+        files,
+        use_ai=use_ai,
+        profile=profile,
+        project_context=project_context,
+        custom_instructions=custom_instructions,
+    )
+
+    # Apply the profile's reporting threshold (e.g. lenient mode hides nitpicks).
+    all_issues = filter_by_min_severity(all_issues, profile)
 
     if use_ai:
         try:
@@ -182,14 +225,21 @@ def run_all_checks(
             llm = LLMClient()
             if llm.is_available():
                 if all_issues:
-                    all_issues = enrich_issues(all_issues, llm)
-                synth = AISynthesizer(llm).synthesize(all_issues)
+                    all_issues = enrich_issues(
+                        all_issues, llm, profile, project_context, custom_instructions
+                    )
+                synth = AISynthesizer(
+                    llm, profile, project_context, custom_instructions
+                ).synthesize(all_issues)
                 save_report_notice(synth, all_issues)
-                return print_ai_report(synth, all_issues)
+                return print_ai_report(synth, all_issues, profile.block_severity)
             else:
-                console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
+                console.print(
+                    f"[yellow]AI provider ({llm.provider_name}) unavailable — "
+                    f"falling back to basic report. {llm.unavailable_message()}[/yellow]"
+                )
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
     save_report_notice(fallback_synthesis(all_issues), all_issues)
-    return print_report(all_issues)
+    return print_report(all_issues, profile.block_severity)

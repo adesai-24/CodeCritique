@@ -8,13 +8,17 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 from critique.checkers.base import Issue, Severity
+from critique.profiles import severity_meets
 
 console = Console()
 
-def print_report(issues: List[Issue]) -> bool:
+def print_report(issues: List[Issue], block_severity: str = "FATAL") -> bool:
     """
     Prints the issues to the console and generates an interactive HTML report.
-    Returns True if passed (no FATAL), False if failed.
+
+    Returns True if the push is allowed.  ``block_severity`` controls the gate:
+    any issue at or above that severity blocks the push (e.g. strict mode passes
+    ``"WARNING"``; mentor mode passes ``"NEVER"``).
     """
     # 1. Console Output (Keep it for immediate feedback)
     if not issues:
@@ -64,13 +68,15 @@ def print_report(issues: List[Issue]) -> bool:
     # except Exception:
     #     pass
 
-    if fatal_issues:
-        console.print(f"\n[bold red]BLOCKED: Fix {len(fatal_issues)} FATAL issues to push.[/bold red]")
+    blocking = [i for i in issues if severity_meets(i.severity, block_severity)]
+    if blocking:
+        console.print(
+            f"\n[bold red]BLOCKED: Fix {len(blocking)} issue(s) at or above "
+            f"{block_severity} severity to push.[/bold red]"
+        )
         return False
-    elif warnings:
+    if warnings:
         console.print(f"\n[bold yellow]WARNINGS: Found {len(warnings)} warning(s).[/bold yellow]")
-        return True
-    
     return True
 
 def generate_html_report(issues: List[Issue]) -> str:
@@ -882,7 +888,7 @@ def generate_html_report(issues: List[Issue]) -> str:
 # Phase 4 — AI-powered report renderer
 # ---------------------------------------------------------------------------
 
-def print_ai_report(synth: Dict[str, Any], issues: List[Issue]) -> bool:
+def print_ai_report(synth: Dict[str, Any], issues: List[Issue], block_severity: str = "FATAL") -> bool:
     """
     Render a curated, senior-engineer-style code review to the terminal.
 
@@ -966,17 +972,16 @@ def print_ai_report(synth: Dict[str, Any], issues: List[Issue]) -> bool:
         console.print(Panel(good_text, title="[green]What's Good[/green]", border_style="green"))
         console.print()
 
-    # Exit logic
-    critical_ids = synth.get("critical", [])
+    # Exit logic — gate on the active profile's blocking severity across all
+    # issues (not just the synthesizer's "critical" bucket).
     warning_ids = synth.get("warnings", [])
-    has_fatal = any(
-        issues[i].severity == Severity.FATAL
-        for i in critical_ids
-        if i < len(issues)
-    )
+    blocking = [i for i in issues if severity_meets(i.severity, block_severity)]
 
-    if has_fatal:
-        console.print(f"[bold red]BLOCKED: Fix {len(critical_ids)} critical issue(s) before pushing.[/bold red]")
+    if blocking:
+        console.print(
+            f"[bold red]BLOCKED: Fix {len(blocking)} issue(s) at or above "
+            f"{block_severity} severity before pushing.[/bold red]"
+        )
         return False
     if warning_ids:
         console.print(f"[bold yellow]WARNING: Found {len(warning_ids)} warning(s).[/bold yellow]")

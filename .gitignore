@@ -16,6 +16,11 @@ htmlcov/
 .vscode
 .codecritique/
 
+# Secrets — never commit API keys
+secrets.env
+*.secrets
+.env
+
 # Environment
 .venv/
 env/

@@ -6,12 +6,14 @@ from pathlib import Path
 from rich import print
 from typing import List
 
+from critique.languages import is_supported
+
 def get_changed_files(target_branch: str = "origin/main") -> List[str]:
     try:
         cmd = ["git", "diff", "--name-only", "--diff-filter=ACM", f"{target_branch}...HEAD"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         files = result.stdout.strip().splitlines()
-        abs_files = [os.path.abspath(f) for f in files if f.endswith(".py")]
+        abs_files = [os.path.abspath(f) for f in files if is_supported(f)]
         return [f for f in abs_files if os.path.exists(f)]
     except subprocess.CalledProcessError:
         return []

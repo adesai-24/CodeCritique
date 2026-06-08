@@ -28,8 +28,15 @@ _REQUIRED_KEYS = ("summary", "fix_first", "critical", "warnings", "suggestions",
 
 
 class AISynthesizer:
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, profile=None, project_context=None, custom_instructions=None):
         self.llm = llm
+        if profile is not None:
+            from critique.profiles import apply_profile_to_system
+            self._system = apply_profile_to_system(
+                SYNTHESIZER_SYSTEM, profile, project_context, custom_instructions
+            )
+        else:
+            self._system = SYNTHESIZER_SYSTEM
 
     def synthesize(self, issues: List[Issue]) -> Dict[str, Any]:
         """
@@ -59,7 +66,7 @@ class AISynthesizer:
 
         try:
             result = self.llm.complete_json(
-                system=SYNTHESIZER_SYSTEM,
+                system=self._system,
                 user=user_msg,
                 schema=SYNTH_SCHEMA,
             )
