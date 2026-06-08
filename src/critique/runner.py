@@ -13,6 +13,7 @@ from critique.checkers.lint import RuffChecker
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
+from critique.checkers.cpp import CppcheckChecker
 from critique.report import print_report, print_ai_report
 from critique.persistence import fallback_synthesis, save_report
 
@@ -67,12 +68,15 @@ def get_target_files(
     if incremental:
         files = get_changed_files()
         if not files:
-            console.print("[bold green]No python files changed. Skipping checks.[/bold green]")
+            console.print("[bold green]No supported files changed. Skipping checks.[/bold green]")
             return []
         console.print(f"[bold blue]Checking {len(files)} changed file(s)...[/bold blue]")
         return files
 
-    files = glob.glob("**/*.py", recursive=True)
+    from critique.languages import SUPPORTED_EXTENSIONS
+    files = []
+    for ext in SUPPORTED_EXTENSIONS:
+        files.extend(glob.glob(f"**/*{ext}", recursive=True))
     files = [f for f in files if "site-packages" not in f and "venv" not in f and ".venv" not in f]
     return [os.path.abspath(f) for f in files]
 
@@ -99,6 +103,7 @@ def scan_files(
         BanditChecker(),
         MypyChecker(),
         CoverageChecker(),
+        CppcheckChecker(),
     ]
 
     if use_ai:

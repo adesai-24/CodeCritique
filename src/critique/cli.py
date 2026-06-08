@@ -1,3 +1,4 @@
+import difflib
 import json
 import typer
 from typing import Dict, List, Optional
@@ -6,7 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from critique.ai.client import LLMClient
-from critique.runner import run_all_checks
+from critique.runner import run_all_checks, get_target_files
 from critique.git_utils import install_pre_push_hook
 from critique.persistence import list_reports, load_report
 from critique.config_cli import config_app
@@ -36,6 +37,97 @@ def check(
         typer.echo("Checks failed. Fix the issues or use --no-verify to bypass (not recommended).")
         raise typer.Exit(code=1)
     typer.echo("All checks passed!")
+
+def _print_diff(file_path: str, original: str, formatted: str) -> None:
+    """Render a coloured unified diff of a formatting change."""
+    diff = difflib.unified_diff(
+        original.splitlines(keepends=True),
+        formatted.splitlines(keepends=True),
+        fromfile=f"{file_path} (original)",
+        tofile=f"{file_path} (formatted)",
+    )
+    for line in diff:
+        text = line.rstrip("\n")
+        if line.startswith("+") and not line.startswith("+++"):
+            console.print(f"[green]{text}[/green]", markup=False, highlight=False)
+        elif line.startswith("-") and not line.startswith("---"):
+            console.print(f"[red]{text}[/red]", markup=False, highlight=False)
+        elif line.startswith("@@"):
+            console.print(f"[cyan]{text}[/cyan]", markup=False, highlight=False)
+        else:
+            console.print(text, markup=False, highlight=False)
+
+
+@app.command("format")
+def format_code(
+    files: Optional[list[str]] = typer.Argument(None, help="Specific files to format."),
+    incremental: bool = typer.Option(
+        True, help="When no files are given, format only changed files (git diff)."
+    ),
+    in_place: bool = typer.Option(
+        False, "--in-place", "-i", help="Write the reformatted code back to disk."
+    ),
+    backup: bool = typer.Option(
+        True, help="With --in-place, save the original as <file>.bak first."
+    ),
+):
+    """
+    Reformat code into a clean, review-ready layout (spacing, aligned
+    declarations, per-function comments) WITHOUT changing behaviour.
+
+    By default this previews a diff. Pass --in-place to apply the changes.
+    Requires an AI provider (same configuration as `check`).
+    """
+    targets = get_target_files(incremental=incremental, custom_files=files)
+    if not targets:
+        typer.echo("No supported files to format.")
+        return
+
+    llm = LLMClient()
+    if not llm.is_available():
+        console.print(f"[red]{llm.unavailable_message()}[/red]")
+        raise typer.Exit(code=1)
+
+    from critique.formatter import CodeFormatter
+    formatter = CodeFormatter(llm)
+
+    changed_count = 0
+    with console.status("[bold blue]Formatting...[/bold blue]"):
+        results = [formatter.format_file(path) for path in targets]
+
+    for result in results:
+        if not result.ok:
+            console.print(f"[yellow]Skipped {result.file_path}: {result.error}[/yellow]")
+            continue
+        if not result.changed:
+            console.print(f"[dim]{result.file_path}: already well-formatted.[/dim]")
+            continue
+
+        changed_count += 1
+        if in_place:
+            try:
+                if backup:
+                    with open(result.file_path + ".bak", "w", encoding="utf-8") as bak:
+                        bak.write(result.original)
+                with open(result.file_path, "w", encoding="utf-8") as f:
+                    f.write(result.formatted)
+            except Exception as exc:
+                console.print(f"[red]Could not write {result.file_path}: {exc}[/red]")
+                continue
+            note = " (backup saved)" if backup else ""
+            console.print(f"[green]Formatted {result.file_path}{note}.[/green]")
+        else:
+            console.print(f"\n[bold]{result.file_path}[/bold]")
+            _print_diff(result.file_path, result.original, result.formatted)
+
+    if changed_count == 0:
+        console.print("[bold green]Nothing to reformat — all files look good.[/bold green]")
+    elif not in_place:
+        console.print(
+            f"\n[bold]{changed_count} file(s) would change.[/bold] "
+            "Re-run with [cyan]--in-place[/cyan] to apply."
+        )
+
 
 @app.command()
 def install_hooks():

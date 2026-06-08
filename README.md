@@ -2,12 +2,17 @@
 
 CodeCritique is a local development tool designed to evaluate your code before you push it to a GitHub repository. It acts as a final check to ensure code quality by integrating static analysis tools and a local AI reviewer into a single, unified feedback loop.
 
+It supports **Python** and **C/C++** out of the box.
+
 ## Features
 
-- **Integrated Linting**: Uses `Ruff` for style and error checking.
+- **Multi-language**: Reviews **Python** and **C/C++** (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, …). File selection (incremental and full-scan) detects supported languages automatically.
+- **Integrated Linting**: Uses `Ruff` for Python style and error checking.
 - **Type Checking**: Uses `Mypy` for static type analysis.
 - **Security Auditing**: Uses `Bandit` to find common security vulnerabilities.
+- **C/C++ Static Analysis**: Uses `cppcheck` to catch memory-safety and correctness issues (buffer overruns, null dereferences, leaks). Optional — skipped cleanly if `cppcheck` isn't installed.
 - **Coverage Reports**: Checks test coverage using `Coverage.py`.
+- **Code Formatter** *(new)*: `codecritique format` agentically reshapes code for review — consistent spacing, column-aligned declarations, and a documenting comment above every function — **without changing behaviour**.
 - **Incremental Checking**: Optionally checks only the files that have changed in your current branch.
 - **Severity Levels**: Categorizes issues into "Fatal" (blocks pushes) and "Warnings" (actionable feedback).
 - **AI Critic** *(new)*: Reviews each file with an LLM to catch logic bugs, edge cases, and design issues that static tools miss.
@@ -74,6 +79,24 @@ If the selected provider has no key (or Ollama isn't running), the AI stages are
 skipped automatically and CodeCritique falls back to static analysis — no crash.
 
 ## Prerequisites
+
+### cppcheck (optional — only for C/C++ static analysis)
+
+C/C++ static analysis is powered by [`cppcheck`](https://cppcheck.sourceforge.io/),
+an external tool (not a Python package). Install it with your system package
+manager:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install cppcheck
+# macOS
+brew install cppcheck
+# Windows
+choco install cppcheck
+```
+
+If `cppcheck` isn't installed, CodeCritique simply skips that checker — the AI
+critic still reviews your C/C++ files, and Python checks are unaffected.
 
 ### Ollama (optional — only for the local `ollama` provider)
 
@@ -177,6 +200,31 @@ Each issue includes:
 - **Reasoning** — plain-English explanation from the AI Enricher
 - **Suggested fix** — a concrete, actionable recommendation
 - **Code context** — the relevant lines from the file
+
+### Code Formatting (review-ready layout)
+
+`codecritique format` rewrites your code into a clean, consistent layout so it's
+easy to read in review — **without changing what the code does**. It applies
+proper spacing, aligns consecutive declarations/assignments into vertical
+columns (the "straight-line" look), and adds a short documenting comment above
+every function. It works for both Python and C/C++.
+
+```bash
+codecritique format                 # preview a diff for changed files
+codecritique format src/main.cpp    # format a specific file
+codecritique format --in-place      # apply the changes (originals saved as *.bak)
+codecritique format --in-place --no-backup
+codecritique format --no-incremental   # consider all supported files in the repo
+```
+
+By default it **previews a unified diff** and applies nothing. Pass
+`--in-place` to write the changes back (the original is copied to `<file>.bak`
+unless you add `--no-backup`). Like the reviewer, it uses your configured AI
+provider and the shared response cache, so re-formatting unchanged code is fast.
+
+> This step is intentionally **format-only** — it never fixes bugs, renames
+> things, or alters logic. Auto-suggested fixes for technical errors are a
+> separate, upcoming feature.
 
 ### Review Modes (suggestion profiles)
 
