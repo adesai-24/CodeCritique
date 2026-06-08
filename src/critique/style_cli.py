@@ -5,6 +5,7 @@ Workflow
 --------
     codecritique style enable            # turn the feature on
     codecritique style learn             # analyse your code, build the profile
+    codecritique style auto on           # learn a little from every `check` run
     codecritique style show              # inspect what was learned
     codecritique style disable           # turn it off (profile is kept)
     codecritique style clear             # delete the learned profile
@@ -41,6 +42,43 @@ def disable() -> None:
     console.print("[yellow]Style learning disabled.[/yellow]")
 
 
+@style_app.command("auto")
+def auto(
+    state: Optional[str] = typer.Argument(
+        None, help="on | off | status (default: status)."
+    ),
+) -> None:
+    """Adaptive 'learn as you review' mode.
+
+    When on, every 'codecritique check' nudges your style profile toward the
+    files it just reviewed (EMA-blended, so it can't overtrain on one diff).
+    """
+    if state is None or state.strip().lower() == "status":
+        on = cfg_mod.load_config().adaptive_style
+        label = "[green]on[/green]" if on else "[yellow]off[/yellow]"
+        console.print(f"Adaptive style learning is {label}.")
+        return
+
+    val = state.strip().lower()
+    if val in cfg_mod._TRUE_WORDS:
+        cfg_mod.set_value("adaptive_style", "on")
+        console.print(
+            "[green]Adaptive style learning enabled[/green] — every "
+            "'codecritique check' now nudges your profile."
+        )
+        if not cfg_mod.load_config().style_learning:
+            console.print(
+                "[dim]Tip: run 'codecritique style enable' so the learned "
+                "profile is actually applied to reviews.[/dim]"
+            )
+    elif val in cfg_mod._FALSE_WORDS:
+        cfg_mod.set_value("adaptive_style", "off")
+        console.print("[yellow]Adaptive style learning disabled.[/yellow]")
+    else:
+        console.print("[red]Usage: codecritique style auto [on|off|status][/red]")
+        raise typer.Exit(code=2)
+
+
 @style_app.command("learn")
 def learn(
     paths: Optional[List[str]] = typer.Argument(
@@ -73,9 +111,10 @@ def show() -> None:
     if profile is None:
         console.print("[yellow]No style profile yet. Run 'codecritique style learn'.[/yellow]")
         raise typer.Exit(code=0)
-    enabled = cfg_mod.load_config().style_learning
-    state = "[green]enabled[/green]" if enabled else "[yellow]disabled[/yellow]"
-    console.print(f"Style learning is {state}.\n")
+    cfg = cfg_mod.load_config()
+    state = "[green]enabled[/green]" if cfg.style_learning else "[yellow]disabled[/yellow]"
+    auto = "[green]on[/green]" if cfg.adaptive_style else "[yellow]off[/yellow]"
+    console.print(f"Style learning is {state}.  Adaptive (learn-as-you-review) is {auto}.\n")
     _print_summary(profile)
 
 

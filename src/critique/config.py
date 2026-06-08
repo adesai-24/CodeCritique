@@ -70,6 +70,8 @@ class CritiqueConfig:
     project_context: Optional[str] = None    # author-provided context for the AI
     custom_instructions: Optional[str] = None  # extra reviewer instructions
     style_learning: bool = False         # personalise fixes to the author's style
+    adaptive_style: bool = False         # "learn as you review": update the style
+                                         # profile from each `check` run (EMA-blended)
     # Reserved for later features.
     # Stored verbatim so newer settings written by a newer CLI survive an older
     # one round-tripping the file.
@@ -193,7 +195,7 @@ def _convert_scalar(key: str, value: Any) -> Any:
         return float(value)
     if key == "timeout":
         return int(value)
-    if key == "style_learning":
+    if key in {"style_learning", "adaptive_style"}:
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in _TRUE_WORDS
