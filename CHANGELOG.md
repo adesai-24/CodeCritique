@@ -4,6 +4,12 @@ All notable changes to CodeCritique will be documented in this file.
 
 ## 0.1.0 - Unreleased
 
+- **Single-line install**: CodeCritique installs as a standalone CLI with
+  `pipx install git+https://github.com/adesai-24/CodeCritique.git` (or `pip
+  install git+...`) instead of cloning the repo into your project. The tool
+  lives in its own environment, keeping your project repo clean. Added
+  `.gitignore` entries so an accidental vendored clone stays invisible; cloning
+  is now only needed for contributing or running the web demo.
 - **C/C++ support**: review `.c`/`.cpp`/`.h`/`.hpp` (and related) files. The AI
   critic understands C/C++ idioms and pitfalls, and a new `cppcheck`-backed
   static checker flags memory-safety and correctness issues. Both incremental

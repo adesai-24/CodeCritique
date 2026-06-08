@@ -70,20 +70,40 @@ one-time setup for **your** language (Part B). Do A, then the B that matches you
 
 ### Part A — install CodeCritique (everyone)
 
+CodeCritique is a **standalone CLI**, not something you clone into your project.
+Install it once with a single line and it lives in its own environment — your
+project repo stays clean.
+
+**Recommended — isolated global install with [pipx](https://pipx.pypa.io):**
+
 ```bash
-git clone https://github.com/adesai-24/CodeCritique.git
-cd CodeCritique
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .
+pipx install git+https://github.com/adesai-24/CodeCritique.git
 ```
 
-This installs two equivalent commands: `codecritique` (and the legacy alias
-`critique`). Verify:
+pipx puts the `codecritique` command on your PATH in its own private
+environment, so it never touches your project's dependencies. Upgrade later
+with `pipx upgrade codecritique`.
+
+**Or — into an existing virtual environment with pip:**
+
+```bash
+pip install git+https://github.com/adesai-24/CodeCritique.git
+```
+
+Either way you get two equivalent commands: `codecritique` (and the legacy
+alias `critique`). Verify:
 
 ```bash
 codecritique --help
 ```
+
+> **Contributing?** Only then do you need a clone:
+> ```bash
+> git clone https://github.com/adesai-24/CodeCritique.git
+> cd CodeCritique && python -m venv .venv
+> source .venv/bin/activate        # Windows: .venv\Scripts\activate
+> pip install -e ".[dev]"
+> ```
 
 ### Part B — set up for your language
 
@@ -104,11 +124,16 @@ choco install cppcheck             # Windows
 
 ### Optional extras
 
+Add extras to the same single-line install (here with pipx; for a plain venv use
+`pip install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git"`):
+
 ```bash
-pip install -e ".[cloud]"   # Gemini / OpenAI / Anthropic / vLLM SDKs
-pip install -e ".[web]"     # the browser demo
-pip install -e ".[dev]"     # pytest + coverage for contributing
+pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git"  # Gemini / OpenAI / Anthropic / vLLM SDKs
+pipx install "codecritique[web]   @ git+https://github.com/adesai-24/CodeCritique.git"  # the browser demo
 ```
+
+From a clone you can use the shorthand `pip install -e ".[cloud]"`,
+`".[web]"`, or `".[dev]"`.
 
 To use the AI stages, add a provider key next — see
 [AI providers & API keys](#6-ai-providers--api-keys). Without a key (and without
@@ -175,7 +200,8 @@ CodeCritique's AI pipeline is **provider-agnostic**. It defaults to Google
 | `anthropic` | `claude-3-5-haiku-latest` | yes | Hosted Claude |
 | `vllm` | `Qwen/Qwen2.5-Coder-7B-Instruct` | optional | Self-hosted, OpenAI-compatible |
 
-Cloud providers need the extra SDKs: `pip install -e ".[cloud]"`.
+Cloud providers need the extra SDKs — install with the `[cloud]` extra (see
+[Optional extras](#optional-extras)).
 
 ### Configure a provider and key
 
@@ -348,8 +374,12 @@ codecritique config set base_url http://localhost:8000/v1
 A browser-based review flow: Monaco editor, sample snippets, GitHub/raw-Gist
 file import, streamed SSE progress, and AI-status detection.
 
+The web demo is served from a clone of the repo. Install the `[web]` extra and
+run the server from the repo root:
+
 ```bash
-pip install -e ".[web]"
+git clone https://github.com/adesai-24/CodeCritique.git
+cd CodeCritique && pip install -e ".[web]"
 uvicorn web.main:app --reload --port 8000
 # Windows: .\web\start.ps1
 ```
