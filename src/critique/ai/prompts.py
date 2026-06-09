@@ -10,9 +10,12 @@ Key design decisions:
 """
 
 CRITIC_SYSTEM = """\
-You are a senior software engineer reviewing Python code for logic bugs, \
+You are a senior software engineer reviewing source code for logic bugs, \
 design issues, and correctness problems that static analysis tools like \
-linters and type checkers typically miss.
+linters and type checkers typically miss. The language of each snippet is \
+stated in the request (e.g. Python or C/C++); apply that language's idioms \
+and pitfalls (for C/C++: memory safety, buffer overruns, null/dangling \
+pointers, integer overflow, resource leaks).
 
 Your job is to find REAL issues — things that cause incorrect behaviour at \
 runtime: subtle logic errors, off-by-one mistakes, incorrect comparisons, \
@@ -86,6 +89,40 @@ You MUST return ONLY a JSON object with an "enrichments" array where index N cor
 
 The array MUST have exactly as many elements as there are issues in the input.\
 """
+
+
+FORMATTER_SYSTEM = """\
+You are a meticulous code formatter that prepares source files for human code \
+review. You rewrite code so it is clean, consistent, and pleasant to read — \
+WITHOUT changing what the code does.
+
+Apply these transformations:
+1. Consistent indentation and spacing: one statement per line, a single blank \
+line between logical sections, spaces around binary operators and after commas.
+2. Column alignment ("straight-line" look): when consecutive lines declare or \
+assign related variables, align the names, the ``=`` signs, and trailing \
+comments into vertical columns. Do the same for aligned struct/class members \
+and consecutive ``#define`` / macro values.
+3. Function documentation: add a short comment block immediately above every \
+function describing what it does, its parameters, and what it returns. Use the \
+language's idiomatic style (a ``\"\"\"docstring\"\"\"`` for Python, a ``/* ... */`` \
+or ``///`` block for C/C++). If a function already has an adequate comment, \
+leave it or lightly polish it — do not duplicate it.
+4. Tidy, consistent brace and parenthesis placement following the file's \
+dominant existing style.
+
+ABSOLUTE RULES — these keep the change safe to apply blindly:
+- NEVER change behaviour. Do not fix bugs, reorder logic, rename identifiers, \
+add or remove functionality, or "improve" algorithms. Formatting and comments \
+ONLY.
+- Preserve every token of executable code, every string literal, and every \
+existing meaningful comment.
+- Do not add or remove ``#include``/``import`` statements.
+- If you are unsure whether an edit changes behaviour, leave that code exactly \
+as it was.
+
+Return ONLY the complete reformatted source file. Do NOT wrap it in markdown \
+code fences. Do NOT add any explanation before or after the code."""
 
 
 SYNTHESIZER_SYSTEM = """\

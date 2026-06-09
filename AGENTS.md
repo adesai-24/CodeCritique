@@ -1,9 +1,11 @@
 # CodeCritique — Agent Guide
 
-CodeCritique is a local pre-push quality gate for Python: it runs Ruff (lint),
-Mypy (types), Bandit (security), and Coverage, optionally layered with a local
-LLM review (Ollama + `qwen2.5-coder:7b`). This file tells AI agents how to call
-the tool and how to work on this repo.
+CodeCritique is a local pre-push quality gate for Python and C/C++: it runs
+Ruff (lint), Mypy (types), Bandit (security), Coverage, a format check, and
+cppcheck for C/C++, optionally layered with an LLM review (Gemini by default;
+Ollama, OpenAI, Anthropic, and vLLM are also supported — see `codecritique
+config providers`). This file tells AI agents how to call the tool and how to
+work on this repo.
 
 ## Using the tool (as an agent)
 
@@ -14,7 +16,7 @@ progress/status chatter to **stderr**.
 codecritique check --json --no-ai            # fast, deterministic static checks on changed files
 codecritique check --json --no-ai path/to/file.py   # specific files
 codecritique check --json --no-ai --no-incremental  # full repo scan
-codecritique check --json                    # adds local-LLM review (slow; requires `ollama serve`)
+codecritique check --json                    # adds the AI review (needs a provider key or Ollama)
 codecritique fix [files...]                  # apply safe lint fixes + reformat in place
 codecritique fix --unsafe                    # also apply behavior-changing fixes
 ```
@@ -68,9 +70,12 @@ Recommendations:
   the curated rule set `E,W,F,B,C4,SIM,UP,C90,RUF`; otherwise the project's own
   config wins. `FMT001` (INFO) means `codecritique fix` would reformat the file.
 
-Other commands: `codecritique list` (saved reports), `codecritique chat --last`
-(interactive Q&A about a report; needs Ollama), `codecritique install-hooks`
-(git pre-push hook).
+Other commands: `codecritique format` (AI-driven, behavior-preserving
+reformatter with diff preview), `codecritique list` (saved reports),
+`codecritique chat --last` (interactive Q&A about a report; needs an AI
+provider), `codecritique config` (provider/key/language/review-mode settings),
+`codecritique style` (personal style profiles), `codecritique cache` (AI cache
+management), `codecritique install-hooks` (git pre-push hook).
 
 ## Environment variables
 
@@ -85,10 +90,13 @@ Other commands: `codecritique list` (saved reports), `codecritique chat --last`
 
 Layout:
 
-- `src/critique/cli.py` — Typer CLI (`check`, `fix`, `list`, `chat`, `install-hooks`)
+- `src/critique/cli.py` — Typer CLI (`check`, `fix`, `format`, `list`, `chat`, `install-hooks`, plus `config`/`cache`/`style` sub-apps)
 - `src/critique/runner.py` — orchestration: file selection, checker fan-out, fix pipeline, report dispatch
 - `src/critique/checkers/` — one checker per file; all implement `BaseChecker.run(files) -> List[Issue]`
-- `src/critique/ai/` — Ollama client (with caching), critic prompts/schemas, enricher, synthesizer
+- `src/critique/ai/` — provider-agnostic LLM client (with caching), providers/, critic prompts/schemas, enricher, synthesizer
+- `src/critique/config.py` + `config_cli.py` — persisted settings (provider, model, language, review mode)
+- `src/critique/profiles.py` — review modes (severity thresholds, tone) applied to prompts and gating
+- `src/critique/languages.py` — supported-extension detection (Python, C/C++)
 - `src/critique/report.py` — terminal renderers (basic table + AI review)
 - `src/critique/persistence.py` — saved reports in `~/.codecritique/reports/`
 - `tests/` — pytest suite; fixtures in `tests/fixtures/`

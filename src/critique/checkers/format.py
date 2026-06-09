@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from typing import List
 from critique.checkers.base import BaseChecker, Issue, Severity
 
@@ -20,7 +21,7 @@ class FormatChecker(BaseChecker):
 
         issues = []
         try:
-            cmd = ["ruff", "format", "--check"] + py_files
+            cmd = [sys.executable, "-m", "ruff", "format", "--check"] + py_files
             result = subprocess.run(cmd, capture_output=True, text=True)
             prefix = "Would reformat:"
             for line in result.stdout.splitlines():

@@ -1,202 +1,493 @@
 # CodeCritique
 
-CodeCritique is a local development tool designed to evaluate your code before you push it to a GitHub repository. It acts as a final check to ensure code quality by integrating static analysis tools and a local AI reviewer into a single, unified feedback loop.
+CodeCritique is an AI-assisted local code review tool. It combines static
+analysis, optional local or cloud AI synthesis, saved review history, and a
+pre-push CLI workflow you run **before** you push code.
 
-## Features
+It reviews **Python** and **C/C++** out of the box.
 
-- **In-Depth Linting**: Uses `Ruff` with a curated rule set that goes far beyond
-  the defaults — likely bugs (`bugbear`), simplifiable code, outdated idioms,
-  comprehension rewrites, and complexity limits. If your project has its own
-  ruff configuration, CodeCritique respects it instead of imposing its own.
-- **Type Checking**: Uses `Mypy` for static type analysis, including the bodies
-  of unannotated functions (`--check-untyped-defs`).
-- **Security Auditing**: Uses `Bandit` to find common security vulnerabilities.
-- **Coverage Reports**: Checks test coverage using `Coverage.py`.
-- **Format Checking + Auto-Fix**: Flags files `ruff format` would rewrite, and
-  `codecritique fix` transforms them in place — safe lint fixes plus consistent
-  formatting in one command.
-- **Incremental Checking**: Optionally checks only the files that have changed in your current branch.
-- **Severity Levels**: Categorizes issues into "Fatal" (blocks pushes) and "Warnings" (actionable feedback).
-- **AI Critic** *(new)*: Reviews each file with a local LLM (`qwen2.5-coder:7b` via Ollama) to catch logic bugs, edge cases, and design issues that static tools miss.
-- **AI Enricher** *(new)*: Runs concurrently to add plain-English reasoning and a concrete suggested fix to every issue found by any checker.
-- **AI Synthesizer + Report** *(new)*: Produces a curated summary — a "fix first" priority call, grouped critical/warning/suggestion buckets, and a "what's good" section — instead of a raw issue list.
-- **AI Response Cache** *(new)*: Reuses prior AI critic, enrichment, and synthesis responses for identical prompts so repeated checks of unchanged code return much faster after the first run.
-- **Parallel Analysis** *(new)*: Runs independent static checkers concurrently and reviews multiple AI critic files with bounded concurrency.
+---
 
-## Prerequisites
+## Contents
 
-### Ollama (required for AI features)
+1. [What it does](#1-what-it-does)
+2. [Requirements](#2-requirements)
+3. [Installation](#3-installation)
+4. [Quick start](#4-quick-start)
+5. [CLI commands](#5-cli-commands)
+6. [AI providers & API keys](#6-ai-providers--api-keys)
+7. [Review modes & project context](#7-review-modes--project-context)
+8. [Formatting code for review](#8-formatting-code-for-review)
+9. [Style learning](#9-style-learning)
+10. [Saved reports & chat](#10-saved-reports--chat)
+11. [Caching & performance](#11-caching--performance)
+12. [Where to tweak the AI](#12-where-to-tweak-the-ai)
+13. [Configuration reference](#13-configuration-reference)
 
-The AI pipeline requires [Ollama](https://ollama.com) running locally with the `qwen2.5-coder:7b` model pulled.
+---
 
-1. **Install Ollama** — download from [ollama.com](https://ollama.com) or via the installer for your platform.
+## 1. What it does
 
-2. **Start the Ollama server**:
+- **Multi-language review** — Python and C/C++ (`.c`, `.cc`, `.cpp`, `.cxx`,
+  `.h`, `.hpp`, …). File selection detects the language automatically.
+- **Configurable language choice** — `auto` detects Python and C/C++ by
+  extension, or set `python` / `cpp` under config to narrow reviews.
+- **Static analysis** — Ruff (style/correctness), Mypy (types), and Bandit
+  (security) for Python; `cppcheck` (memory safety, leaks, null derefs) for
+  C/C++.
+- **Coverage check** — reads Coverage.py data and warns below the threshold.
+- **AI critic** — an LLM catches logic bugs, edge cases, and design issues the
+  static tools miss.
+- **AI enrichment & synthesis** — adds plain-English reasoning plus a concrete
+  fix to every finding, then produces a prioritized "fix this first" report.
+- **Incremental by default** — reviews only the files changed on your current
+  branch; fatal findings block a push via the Git pre-push hook.
+- **Pluggable AI** — Gemini (free default), Ollama (local), OpenAI, Anthropic,
+  or a self-hosted vLLM endpoint. Switch with one command.
+- **Saved reports + chat** — every run is saved locally; list past reports or
+  chat with one to dig into findings.
 
-   ```bash
-   ollama serve
-   ```
+---
 
-3. **Pull the model** (one-time, ~4 GB download):
+## 2. Requirements
 
-   ```bash
-   ollama pull qwen2.5-coder:7b
-   ```
+| Need | For |
+|------|-----|
+| **Python 3.10 / 3.11 / 3.12** | Required — CodeCritique itself runs on Python |
+| **Git** | Required — incremental checks and the pre-push hook |
+| **cppcheck** | Only if you review **C/C++** |
+| **An AI provider key** *(or Ollama)* | Only if you want the AI stages (free Gemini tier works) |
 
-If Ollama is not running when you invoke `critique`, the AI stages are skipped automatically and the tool falls back to the standard static-analysis report — no crash, no manual flag needed.
+Reviewing C/C++ does **not** require you to write Python — CodeCritique is just
+the tool; your project can be in any language it supports.
 
-## Installation
+---
 
-1. **Clone the repository**:
+## 3. Installation
 
-   ```bash
-   git clone https://github.com/yourusername/CodeCritique.git
-   cd CodeCritique
-   ```
+Installation has **two parts**: install the tool once (Part A), then do the
+one-time setup for **your** language (Part B). Do A, then the B that matches you.
 
-2. **Set up a virtual environment**:
+### Part A — install CodeCritique (everyone)
 
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
+CodeCritique is a **standalone CLI**, not something you clone into your project.
+Install it once with a single line and it lives in its own environment — your
+project repo stays clean.
 
-3. **Install CodeCritique**:
-   ```bash
-   pip install -e .
-   ```
-
-Supported Python versions: 3.10 through 3.12.
-
-## Usage
-
-### Manual Check
-
-Run the critique on only your modified files (AI enabled by default):
+**Recommended — isolated global install with [pipx](https://pipx.pypa.io):**
 
 ```bash
+pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"
+```
+
+pipx puts the `codecritique` command on your PATH in its own private
+environment, so it never touches your project's dependencies.
+
+Upgrade to a newer release tag by replacing `v0.1.2` with the release you want:
+
+```bash
+pipx uninstall codecritique
+pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"
+```
+
+**Or — into an existing virtual environment with pip:**
+
+```bash
+pip install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"
+```
+
+Either way you get two equivalent commands: `codecritique` (and the legacy
+alias `critique`). Verify:
+
+```bash
+codecritique --help
+```
+
+> **Contributing?** Only then do you need a clone:
+> ```bash
+> git clone https://github.com/adesai-24/CodeCritique.git
+> cd CodeCritique && python -m venv .venv
+> source .venv/bin/activate        # Windows: .venv\Scripts\activate
+> pip install -e ".[dev]"
+> ```
+
+### Part B — set up for your language
+
+**If you write Python** — you're done. Ruff, Mypy, and Bandit ship with the
+install. Skip ahead to [Quick start](#4-quick-start).
+
+**If you write C/C++** — also install `cppcheck`, the external static analyzer
+(it is not a Python package):
+
+```bash
+sudo apt-get install cppcheck      # Debian/Ubuntu
+brew install cppcheck              # macOS
+choco install cppcheck             # Windows
+```
+
+> If `cppcheck` is missing, CodeCritique simply skips that one checker — the AI
+> critic still reviews your C/C++ and nothing crashes.
+
+### Optional extras
+
+Gemini support is included in the base install because Gemini is the default
+hosted provider. Add extras only if you want OpenAI or Anthropic SDK support
+(here with pipx; for a plain venv use
+`pip install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"`):
+
+```bash
+pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"  # OpenAI / Anthropic SDKs
+```
+
+From a clone you can use the shorthand `pip install -e ".[cloud]"` or
+`".[dev]"`.
+
+To use the AI stages, add a provider key next — see
+[AI providers & API keys](#6-ai-providers--api-keys). Without a key (and without
+Ollama running), the AI stages are skipped automatically and you still get full
+static analysis.
+
+---
+
+## 4. Quick start
+
+```bash
+# 1. (optional) add a free Gemini key to turn on the AI stages
+codecritique config set-key gemini          # prompts; input is hidden
+
+# 2. review the files you changed on this branch
 codecritique check
-```
 
-Run on specific files:
-
-```bash
-codecritique check path/to/file.py
-```
-
-Run a full scan of all Python files in the repository:
-
-```bash
-codecritique check --no-incremental
-```
-
-Run with AI features disabled (static analysis only, no Ollama required):
-
-```bash
-codecritique check --no-ai
-```
-
-### Auto-Fix
-
-Clean up the code before (or after) a check — applies ruff's safe lint fixes
-and reformats the files in place:
-
-```bash
-codecritique fix                 # fix changed files
-codecritique fix path/to/file.py # fix specific files
-codecritique fix --unsafe        # also apply fixes that may change behavior
-```
-
-`--unsafe` enables rewrites like `x == True` → `x`; review the diff afterwards.
-
-### Machine-Readable Output (AI Agents & CI)
-
-`--json` prints a single JSON object to stdout and routes all progress/status
-messages to stderr, so the output is safe to pipe or parse:
-
-```bash
-codecritique check --json --no-ai
-```
-
-The payload contains `passed`, `files_checked`, `issues` (file, line, code,
-severity, reasoning, suggested fix, code context), and the `synthesis` summary.
-Exit code is `0` when no FATAL issues were found and `1` otherwise.
-
-See [AGENTS.md](AGENTS.md) for the full JSON schema and agent usage guide.
-
-### AI Report Output
-
-When Ollama is running, `critique check` produces a curated AI report instead of a raw issue list:
-
-```
-+-------------------------- CodeCritique AI Review ---------------------------+
-| Found 3 issue(s). Review the list below.                                    |
-+-----------------------------------------------------------------------------+
-
-+-------------------------------- !! Priority --------------------------------+
-| Fix First: src/app.py:42 - Unhandled None return                            |
-+-----------------------------------------------------------------------------+
-
-------------------------------------------------------------
-  CRITICAL - Must Fix
-------------------------------------------------------------
-
-  Unhandled None return  (AI)
-  src/app.py:42
-  get_user() can return None when the user is not found, but the caller
-  dereferences the result without checking.
-  Fix: Add `if user is None: return` before line 43.
-
-BLOCKED: Fix 2 critical issue(s) before pushing.
-```
-
-Each issue includes:
-- **Source** — which checker flagged it (`AI`, `ruff`, `bandit`, etc.)
-- **Reasoning** — plain-English explanation from the AI Enricher
-- **Suggested fix** — a concrete, actionable recommendation
-- **Code context** — the relevant lines from the file
-
-### Git Hooks
-
-To automate this tool, install it as a Git `pre-push` hook. This prevents pushing if any fatal issues are found.
-
-```bash
+# 3. make CodeCritique run automatically before every push
 codecritique install-hooks
 ```
 
-## Git Hooks Explained
+That's it. `codecritique check` runs static analysis + AI review on your
+changed files and prints a prioritized report. The pre-push hook runs the same
+check and blocks the push if there are fatal findings (bypass with
+`git push --no-verify` if you must).
 
-The `install-hooks` command creates a script in `.git/hooks/pre-push`.
+---
 
-Each time you run `git push`, your computer automatically runs `critique check --incremental` first. If the tool finds critical issues (like a syntax error or security hole), it returns a failure code to Git, which cancels your push. This ensures that only high-quality, verified code reaches your remote repository.
-
-When Ollama is running, the pre-push hook also runs the full AI pipeline. If Ollama is offline, the hook falls back to static-analysis-only mode without any extra configuration.
-
-## AI Caching
-
-AI reviews are slower than static checks because the model has to read the prompt, process code context, generate structured JSON, and return it over the local Ollama API. CodeCritique caches deterministic AI responses under `~/.codecritique/cache/llm_cache.json`, keyed by the model, prompt, schema, and generation options.
-
-That means the first AI review of a file or finding can still take a while, but repeated checks of unchanged code can reuse the cached critic, enrichment, and synthesis output instead of calling the model again. If the code, prompt, model, or schema changes, CodeCritique automatically misses the cache and asks the model for a fresh result.
-
-To force fresh AI responses for a run, disable the cache:
+## 5. CLI commands
 
 ```bash
-CODECRITIQUE_AI_CACHE=0 codecritique check
+codecritique check                       # review changed files on this branch
+codecritique check src/app.py main.cpp   # review specific files
+codecritique check --no-incremental      # review the whole repo
+codecritique check --no-ai               # static analysis only
+codecritique check --json                # machine-readable JSON output (AI agents, CI)
+codecritique check --learn               # also adapt your style profile (see §9)
+
+codecritique fix                         # apply ruff's safe lint fixes + reformat in place
+codecritique fix --unsafe                # also apply behavior-changing fixes
+codecritique install-hooks               # install the Git pre-push hook
+codecritique format                      # reshape code for review (see §8)
+
+codecritique config languages            # list language choices
+codecritique config language cpp         # review only C/C++ files
+codecritique list                        # list saved reports
+codecritique chat --last                 # chat with the most recent report
+codecritique chat rev_abc123             # chat with a specific report
+
+codecritique config show                 # show current configuration
+codecritique cache stats                 # AI cache size / entries
 ```
 
-You can also tune concurrency when a machine has limited CPU or memory:
+Findings are bucketed as `FATAL`, `WARNING`, or `INFO`. Only `FATAL` blocks a
+push by default (see [Review modes](#7-review-modes--project-context) to change
+that). There is no per-run `--language` option; set the default once with
+`codecritique config language auto|python|cpp`.
+
+Python linting is in-depth by default: when your project has no ruff
+configuration of its own, checks use a curated rule set covering likely bugs
+(`bugbear`), simplifiable code, outdated idioms, comprehension rewrites, and
+complexity limits — and mypy analyzes unannotated function bodies too. If your
+project does configure ruff, CodeCritique respects your settings instead.
+
+`check --json` prints one JSON object to stdout (issues, severities, reasoning,
+suggested fixes, synthesis) and routes status messages to stderr, with exit
+code `0`/`1` — built for AI agents and CI. See [AGENTS.md](AGENTS.md) for the
+schema and agent usage guide.
+
+`fix` is the deterministic cleanup: ruff's safe autofixes plus `ruff format`,
+applied in place to changed files. `format` (§8) is the AI counterpart that
+reshapes code for review.
+
+---
+
+## 6. AI providers & API keys
+
+CodeCritique's AI pipeline is **provider-agnostic**. It defaults to Google
+**Gemini** (generous free tier); switch backends any time.
+
+| Provider | Default model | Needs a key? | Notes |
+|----------|---------------|--------------|-------|
+| `gemini` | `gemini-2.0-flash` | yes (free) | Default. Free key: <https://aistudio.google.com/apikey> |
+| `ollama` | `qwen2.5-coder:7b` | no | Fully local; needs the Ollama server (below) |
+| `openai` | `gpt-4o-mini` | yes | Hosted OpenAI |
+| `anthropic` | `claude-3-5-haiku-latest` | yes | Hosted Claude |
+| `vllm` | `Qwen/Qwen2.5-Coder-7B-Instruct` | optional | Self-hosted, OpenAI-compatible |
+
+Gemini support ships in the base install. OpenAI and Anthropic need the extra
+SDKs — install with the `[cloud]` extra (see [Optional extras](#optional-extras)).
+
+### Configure a provider and key
 
 ```bash
-CODECRITIQUE_CHECKER_WORKERS=2 CODECRITIQUE_AI_CRITIC_WORKERS=1 codecritique check
+codecritique config providers          # list supported providers
+codecritique config show               # show what's active
+codecritique config languages          # list language choices
+codecritique config language cpp       # auto, python, or cpp
+
+codecritique config set-key gemini     # set a key (input hidden)
+codecritique config set provider openai
+codecritique config set-key openai sk-...
+
+# point at a local vLLM server (no key required)
+codecritique config set provider vllm
+codecritique config set base_url http://localhost:8000/v1
 ```
 
-## Configuration
+### How keys are kept safe
 
-Currently, the tool uses default configurations for the underlying tools:
+- Stored in `~/.codecritique/secrets.env` with `0600` (owner-only) permissions —
+  never in your repo. That path is git-ignored.
+- Masked (`AIza…q7Yk`) whenever displayed.
+- You can skip on-disk storage entirely with an env var
+  (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …), which takes
+  precedence over the file. This is the recommended approach for CI.
 
-- **Coverage**: Hardcoded threshold of 80%.
-- **Linter**: Uses the default Ruff configuration.
-- **Incremental Mode**: Compares current branch changes against `origin/main`.
-- **AI Model**: `qwen2.5-coder:7b` via Ollama at `http://localhost:11434`. Override via environment variable or by editing `src/critique/ai/client.py`.
+### Local AI with Ollama (no key, fully offline)
 
-Future versions will support a `critique.toml` file for custom thresholds, rule exclusions, and model selection.
+```bash
+ollama serve
+ollama pull qwen2.5-coder:7b
+codecritique config set provider ollama
+```
+
+With Ollama running, the three AI stages — critic, enricher, synthesizer —
+activate automatically. If it's offline, CodeCritique falls back to static
+analysis and still saves a report.
+
+---
+
+## 7. Review modes & project context
+
+A **mode** tunes the AI's tone and focus, which findings surface, and which
+severities block a push — without touching the checkers.
+
+```bash
+codecritique config modes              # list modes
+codecritique config mode strict        # switch mode
+```
+
+| Mode | Focus | Reports ≥ | Blocks push ≥ |
+|------|-------|-----------|---------------|
+| `balanced` (default) | Pragmatic; real problems only | INFO | FATAL |
+| `strict` | Zero-tolerance; flags everything | INFO | **WARNING** |
+| `lenient` | Real bugs only; hides nitpicks | WARNING | FATAL |
+| `security` | Vulnerabilities & unsafe patterns | INFO | FATAL |
+| `mentor` | Detailed, teaching tone | INFO | **NEVER** |
+| `concise` | One-line findings & fixes | INFO | FATAL |
+
+**Project context** tells the reviewer about your stack so suggestions fit (and
+it becomes part of the AI cache key, so updating it produces fresh reviews):
+
+```bash
+codecritique config context "Async FastAPI service; prefer pydantic models."
+codecritique config set custom_instructions "We avoid global state; flag it."
+codecritique config wizard             # guided interactive setup
+```
+
+---
+
+## 8. Formatting code for review
+
+`codecritique format` reshapes code into a clean, consistent layout —
+consistent spacing, column-aligned declarations, and a documenting comment
+above every function — **without changing behavior**. Works for Python and
+C/C++.
+
+```bash
+codecritique format                 # preview a diff for changed files
+codecritique format src/main.cpp    # format a specific file
+codecritique format --in-place      # apply changes (originals saved as *.bak)
+codecritique format --in-place --no-backup
+codecritique format --no-incremental
+```
+
+It previews a unified diff and applies nothing by default. This step is
+intentionally **format-only** — it never fixes bugs, renames things, or alters
+logic.
+
+---
+
+## 9. Style learning
+
+CodeCritique can learn *your* coding habits and tailor suggested fixes so they
+read like something you'd write.
+
+```bash
+codecritique style enable        # turn it on
+codecritique style learn         # analyze your code (defaults to current dir)
+codecritique style show          # see what was learned (and adaptive state)
+codecritique style disable       # turn it off (keeps the profile)
+```
+
+**How it works (no fine-tuning, nothing leaves your machine):** `style learn`
+statically analyzes your existing Python — quote style, type-hint/docstring
+coverage, f-string usage, naming case, typical function length and line width —
+and saves a small JSON profile at `~/.codecritique/style_profile.json`. When
+enabled, a concise summary is injected into the reviewer's context so its fixes
+match your conventions. Re-run `style learn` whenever your conventions evolve.
+
+### Learn as you review (adaptive, optional)
+
+Instead of re-running `style learn` by hand, let the profile keep adapting on
+its own — every `codecritique check` learns a little from the files it just
+reviewed:
+
+```bash
+codecritique style auto on       # learn a little from every check (persistent)
+codecritique style auto off      # stop
+codecritique check --learn       # learn just for this one run
+codecritique check --no-learn    # skip learning for this one run
+```
+
+**Won't it overtrain?** No — that's the whole point of making it optional and
+gradual. It's **off by default**, and when on, each run only *nudges* the
+profile using an exponential moving average (learning rate ≈ 0.15). A single
+odd diff can't flip your established conventions; the profile drifts slowly
+toward your real, current habits over many reviews. Counters accumulate so
+`style show` reflects everything seen over time. (Learning analyzes Python; C/C++
+files in a run are skipped for the profile.)
+
+---
+
+## 10. Saved reports & chat
+
+Every CLI run saves a compact JSON report under `~/.codecritique/reports` (only
+the 50 most recent are kept).
+
+```bash
+codecritique list                # list saved reports
+codecritique chat --last         # chat with the most recent
+codecritique chat rev_abc123     # chat with a specific report
+```
+
+Report chat uses local Ollama streaming and answers from the saved findings —
+file paths, line numbers, reasoning, and suggested fixes.
+
+---
+
+## 11. Caching & performance
+
+CodeCritique caches AI responses under `~/.codecritique/cache` (in-memory +
+`llm_cache.json` on disk + a semantic index for near-duplicate prompts, with
+AST-derived keys so comment/whitespace-only edits reuse prior results).
+
+```bash
+codecritique cache stats         # size, entry count, semantic buckets
+codecritique cache clear         # force fresh inference next run
+CODECRITIQUE_AI_CACHE=0 codecritique check   # disable caching for one run
+```
+
+**Tuning knobs** (only applied when set):
+
+```bash
+# concurrency on smaller machines
+CODECRITIQUE_CHECKER_WORKERS=2 \
+CODECRITIQUE_AI_CRITIC_WORKERS=1 \
+CODECRITIQUE_AI_CHUNK_WORKERS=4 \
+codecritique check
+
+# Ollama runtime
+CODECRITIQUE_NUM_PREDICT=1024 \  # cap generated tokens (speed)
+CODECRITIQUE_NUM_CTX=8192 \      # context window
+CODECRITIQUE_NUM_GPU=99 \        # GPU-offloaded layers
+CODECRITIQUE_KEEP_ALIVE=30m \    # keep the model loaded (-1 = forever)
+codecritique check
+```
+
+**Fastest local setup:** for big speedups over Ollama on the same hardware, run
+a [vLLM](https://docs.vllm.ai) server (continuous batching + paged KV cache,
+plus guided JSON decoding) and point CodeCritique at it:
+
+```bash
+codecritique config set provider vllm
+codecritique config set base_url http://localhost:8000/v1
+```
+
+---
+
+## 12. Where to tweak the AI
+
+Everything that shapes the reviewer lives in **one place: `~/.codecritique/`**
+(your home directory). There is no separate "skill file" system — you steer the
+AI through config values and the prompt templates below. Relocate the whole
+directory by setting `CODECRITIQUE_HOME=/some/path`.
+
+| Path | What it controls | How to edit |
+|------|------------------|-------------|
+| `~/.codecritique/config.json` | Provider, model, review **mode**, **project context**, **custom instructions**, style/adaptive toggles | `codecritique config ...` (preferred) or edit the JSON |
+| `~/.codecritique/style_profile.json` | Your learned coding style injected into reviews | `codecritique style learn` / `style auto` (or edit the JSON) |
+| `~/.codecritique/secrets.env` | API keys (`0600`, git-ignored) | `codecritique config set-key <provider>` |
+| `~/.codecritique/reports/` | Saved review reports (JSON) | `codecritique list` / `chat` |
+| `~/.codecritique/cache/` | AI response cache | `codecritique cache stats` / `clear` |
+
+**The two knobs you'll use most** — natural-language context the AI sees on
+every review:
+
+```bash
+codecritique config context "Async FastAPI service; prefer pydantic models."
+codecritique config set custom_instructions "We avoid global state; flag it."
+codecritique config show          # see everything that's currently set
+```
+
+**Prompt templates (advanced).** The actual system prompts for each AI stage —
+critic, enricher, formatter, synthesizer — live in the installed package at
+`critique/ai/prompts.py` (`CRITIC_SYSTEM`, `ENRICHER_SYSTEM`,
+`BATCH_ENRICHER_SYSTEM`, `FORMATTER_SYSTEM`, `SYNTHESIZER_SYSTEM`). Find the file
+on your machine with:
+
+```bash
+python -c "import critique.ai.prompts as p; print(p.__file__)"
+```
+
+Editing those changes the AI's base behavior for everyone using that install —
+prefer `config context` / `custom_instructions` for project-specific tweaks, and
+reserve prompt edits for a contributor clone.
+
+---
+
+## 13. Configuration reference
+
+**Defaults:**
+
+- Coverage threshold: 80%
+- Incremental base: `origin/main`
+- Default provider/model: `gemini` / `gemini-2.0-flash`
+- Language choice: `auto` (review all supported Python and C/C++ files)
+- Local model: `qwen2.5-coder:7b`; Ollama URL: `http://localhost:11434`
+- AI cache: enabled
+- Saved report limit: 50
+- Style learning / adaptive ("learn as you review"): both off
+
+Configuration lives in `~/.codecritique/config.json` (managed via
+`codecritique config`). Environment overrides take highest precedence — handy
+for CI:
+
+| Variable | Effect |
+|----------|--------|
+| `CODECRITIQUE_PROVIDER` | Override the active provider |
+| `CODECRITIQUE_MODEL` | Override the model |
+| `CODECRITIQUE_BASE_URL` | Override the endpoint (ollama / vllm / openai-compatible) |
+| `CODECRITIQUE_LANGUAGE` | Override language choice (`auto`, `python`, `cpp`) |
+| `CODECRITIQUE_TEMPERATURE` | Override sampling temperature |
+| `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Provider API keys (preferred for CI) |
+
+CodeCritique does not yet read a per-project config file. A future version may
+add `critique.toml` for thresholds, rule exclusions, and model settings.
+</content>
+</invoke>

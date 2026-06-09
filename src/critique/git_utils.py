@@ -6,6 +6,8 @@ from pathlib import Path
 from rich import print
 from typing import List
 
+from critique.languages import is_supported_for_choice
+
 def get_current_branch() -> str:
     """Return the current git branch name, or '' outside a repo."""
     try:
@@ -18,12 +20,12 @@ def get_current_branch() -> str:
         return ""
 
 
-def get_changed_files(target_branch: str = "origin/main") -> List[str]:
+def get_changed_files(target_branch: str = "origin/main", language: str = "auto") -> List[str]:
     try:
         cmd = ["git", "diff", "--name-only", "--diff-filter=ACM", f"{target_branch}...HEAD"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         files = result.stdout.strip().splitlines()
-        abs_files = [os.path.abspath(f) for f in files if f.endswith(".py")]
+        abs_files = [os.path.abspath(f) for f in files if is_supported_for_choice(f, language)]
         return [f for f in abs_files if os.path.exists(f)]
     except subprocess.CalledProcessError:
         return []

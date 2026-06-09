@@ -15,6 +15,7 @@ from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
 from critique.checkers.format import FormatChecker
+from critique.checkers.cpp import CppcheckChecker
 from critique.report import print_report, print_ai_report
 from critique.persistence import fallback_synthesis, issue_to_dict, save_report
 
@@ -79,35 +80,54 @@ def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> L
 def get_target_files(
     incremental: bool = True,
     custom_files: Optional[List[str]] = None,
+    language: Optional[str] = None,
 ) -> List[str]:
     """Resolve which files to check based on the active mode."""
     bin_dir = os.path.join(sys.prefix, "Scripts" if os.name == "nt" else "bin")
     os.environ["PATH"] = bin_dir + os.pathsep + os.environ["PATH"]
+    if language is None:
+        from critique.config import load_config
+        language = load_config().language
 
     if custom_files:
-        files = [os.path.abspath(f) for f in custom_files]
+        from critique.languages import is_supported_for_choice
+        files = [
+            os.path.abspath(f)
+            for f in custom_files
+            if is_supported_for_choice(f, language)
+        ]
         console.print(f"[bold blue]Checking {len(files)} target file(s)...[/bold blue]")
         return files
 
     if incremental:
-        files = get_changed_files()
+        files = get_changed_files(language=language)
         if not files:
-            console.print("[bold green]No python files changed. Skipping checks.[/bold green]")
+            console.print("[bold green]No supported files changed. Skipping checks.[/bold green]")
             return []
         console.print(f"[bold blue]Checking {len(files)} changed file(s)...[/bold blue]")
         return files
 
-    files = glob.glob("**/*.py", recursive=True)
+    from critique.languages import extensions_for_choice
+    files = []
+    for ext in extensions_for_choice(language):
+        files.extend(glob.glob(f"**/*{ext}", recursive=True))
     files = [f for f in files if "site-packages" not in f and "venv" not in f and ".venv" not in f]
     return [os.path.abspath(f) for f in files]
 
 
-def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
+def scan_files(
+    files: List[str],
+    use_ai: bool = True,
+    profile=None,
+    project_context=None,
+    custom_instructions=None,
+) -> List[Issue]:
     """
     Run all configured checkers on the provided file list.
 
-    When use_ai=True, appends AICriticChecker if Ollama is reachable.
-    Degrades gracefully to static-only mode if Ollama is offline.
+    When use_ai=True, appends AICriticChecker if the AI provider is reachable.
+    Degrades gracefully to static-only mode otherwise.  The active review
+    ``profile`` tunes the AI critic's tone and caching.
     """
     if not files:
         return []
@@ -118,6 +138,7 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
         MypyChecker(),
         CoverageChecker(),
         FormatChecker(),
+        CppcheckChecker(),
     ]
 
     if use_ai:
@@ -126,11 +147,13 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
             from critique.checkers.ai_critic import AICriticChecker
             llm = LLMClient()
             if llm.is_available():
-                checkers.append(AICriticChecker(llm))
+                checkers.append(
+                    AICriticChecker(llm, profile, project_context, custom_instructions)
+                )
             else:
                 console.print(
-                    "[yellow]Ollama not reachable — skipping AI Critic. "
-                    "Start it with: ollama serve[/yellow]"
+                    f"[yellow]AI provider ({llm.provider_name}) unavailable — "
+                    f"skipping AI Critic. {llm.unavailable_message()}[/yellow]"
                 )
         except Exception as exc:
             console.print(f"[yellow]AI Critic unavailable: {exc}[/yellow]")
@@ -213,12 +236,14 @@ def fix_files(
     """
     import subprocess
 
-    files = get_target_files(incremental, custom_files)
+    # ruff only handles Python; C/C++ files from the selector are skipped.
+    files = [f for f in get_target_files(incremental, custom_files) if f.endswith(".py")]
     if not files:
+        console.print("[yellow]No Python files to fix.[/yellow]")
         return True
 
     try:
-        fix_cmd = ["ruff", "check", "--fix", "--exit-zero"]
+        fix_cmd = [sys.executable, "-m", "ruff", "check", "--fix", "--exit-zero"]
         if not project_has_ruff_config():
             fix_cmd.append(f"--select={CURATED_RULES}")
         if unsafe:
@@ -226,7 +251,8 @@ def fix_files(
         fix_result = subprocess.run(fix_cmd + files, capture_output=True, text=True)
 
         fmt_result = subprocess.run(
-            ["ruff", "format"] + files, capture_output=True, text=True
+            [sys.executable, "-m", "ruff", "format"] + files,
+            capture_output=True, text=True,
         )
     except FileNotFoundError:
         console.print("[red]ruff is not installed or not on PATH.[/red]")
@@ -246,6 +272,7 @@ def run_all_checks(
     custom_files: Optional[List[str]] = None,
     use_ai: bool = True,
     emit_json: bool = False,
+    learn: Optional[bool] = None,
 ) -> bool:
     """
     Orchestrate the full check pipeline.
@@ -254,15 +281,62 @@ def run_all_checks(
     With emit_json=True, prints a machine-readable JSON result to stdout
     instead of the rich terminal report.
     """
-    files = get_target_files(incremental, custom_files)
+    # Load the active review profile + project context once for this run.
+    from critique.config import load_config
+    from critique.profiles import (
+        resolve_active_profile,
+        filter_by_min_severity,
+    )
+    cfg = load_config()
+    profile = resolve_active_profile(cfg)
+    project_context = cfg.project_context
+    custom_instructions = cfg.custom_instructions
+
+    # If style learning is on and a profile exists, fold the author's learned
+    # conventions into the reviewer instructions so fixes match their habits.
+    from critique.style import style_context_for_prompts
+    style_note = style_context_for_prompts(cfg)
+    if style_note:
+        custom_instructions = (
+            f"{custom_instructions}\n\n{style_note}" if custom_instructions else style_note
+        )
+
+    files = get_target_files(incremental, custom_files, cfg.language)
     if not files:
         if not incremental:
-            console.print("[yellow]No python files found.[/yellow]")
+            console.print("[yellow]No supported files found.[/yellow]")
         if emit_json:
             return emit_json_report([], [], fallback_synthesis([]))
         return True
 
-    all_issues = scan_files(files, use_ai=use_ai)
+    all_issues = scan_files(
+        files,
+        use_ai=use_ai,
+        profile=profile,
+        project_context=project_context,
+        custom_instructions=custom_instructions,
+    )
+
+    # "Learn as you review": optionally fold the files we just looked at into
+    # the author's style profile so it keeps adapting. Off by default; opt in
+    # per-run with --learn or persistently via `codecritique style auto on`.
+    # EMA-blended so a single run can't overtrain the profile.
+    do_learn = cfg.adaptive_style if learn is None else learn
+    if do_learn:
+        try:
+            from critique.style import learn_incrementally
+            updated = learn_incrementally(files)
+            if updated is not None:
+                console.print(
+                    "[dim]Adaptive style: nudged your profile from "
+                    f"{len(files)} file(s) (now reflects {updated.functions} "
+                    "function(s) seen over time).[/dim]"
+                )
+        except Exception as exc:
+            console.print(f"[yellow]Adaptive style learning skipped: {exc}[/yellow]")
+
+    # Apply the profile's reporting threshold (e.g. lenient mode hides nitpicks).
+    all_issues = filter_by_min_severity(all_issues, profile)
 
     synth: Optional[Dict[str, Any]] = None
     if use_ai:
@@ -273,11 +347,18 @@ def run_all_checks(
             llm = LLMClient()
             if llm.is_available():
                 if all_issues:
-                    all_issues = enrich_issues(all_issues, llm)
+                    all_issues = enrich_issues(
+                        all_issues, llm, profile, project_context, custom_instructions
+                    )
                 context = build_review_context(files, incremental, custom_files)
-                synth = AISynthesizer(llm).synthesize(all_issues, context=context)
+                synth = AISynthesizer(
+                    llm, profile, project_context, custom_instructions
+                ).synthesize(all_issues, context=context)
             else:
-                console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
+                console.print(
+                    f"[yellow]AI provider ({llm.provider_name}) unavailable — "
+                    f"falling back to basic report. {llm.unavailable_message()}[/yellow]"
+                )
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
@@ -293,5 +374,5 @@ def run_all_checks(
             report_id=saved.get("id") if saved else None,
         )
     if ai_synthesis:
-        return print_ai_report(synth, all_issues)
-    return print_report(all_issues)
+        return print_ai_report(synth, all_issues, profile.block_severity)
+    return print_report(all_issues, profile.block_severity)

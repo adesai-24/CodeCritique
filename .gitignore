@@ -16,6 +16,11 @@ htmlcov/
 .vscode
 .codecritique/
 
+# Secrets — never commit API keys
+secrets.env
+*.secrets
+.env
+
 # Environment
 .venv/
 env/
@@ -26,3 +31,10 @@ ENV/
 dist/
 build/
 *.egg-info/
+
+# Vendored CodeCritique — prefer `pip install git+...` over committing a clone.
+# These keep an accidental nested clone out of a project repo so the tool stays
+# invisible. Copy this block into your own project's .gitignore if you vendor it.
+/CodeCritique/
+/codecritique/
+.codecritique-tool/

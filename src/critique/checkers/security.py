@@ -1,5 +1,6 @@
 import subprocess
 import json
+import sys
 from typing import List
 from critique.checkers.base import BaseChecker, Issue, Severity
 
@@ -8,12 +9,15 @@ class BanditChecker(BaseChecker):
     description = "Common security issues finder."
 
     def run(self, files: List[str]) -> List[Issue]:
+        files = [f for f in files if f.endswith((".py", ".pyi"))]
         if not files:
             return []
-        
+
         issues = []
         try:
-            cmd = ["bandit", "-f", "json", "-q"] + files
+            # `python -m bandit` instead of the bare exe: console-script
+            # launchers break silently when a venv is moved.
+            cmd = [sys.executable, "-m", "bandit", "-f", "json", "-q"] + files
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             output = result.stdout

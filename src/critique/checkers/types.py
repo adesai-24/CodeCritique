@@ -1,5 +1,6 @@
 import subprocess
 import re
+import sys
 from typing import List
 from critique.checkers.base import BaseChecker, Issue, Severity
 
@@ -8,15 +9,18 @@ class MypyChecker(BaseChecker):
     description = "Static type checker."
 
     def run(self, files: List[str]) -> List[Issue]:
+        files = [f for f in files if f.endswith((".py", ".pyi"))]
         if not files:
             return []
-        
+
         issues = []
         try:
             # --check-untyped-defs analyzes the bodies of unannotated functions
             # too, instead of silently skipping them.
+            # `python -m mypy` instead of the bare exe: console-script
+            # launchers break silently when a venv is moved.
             cmd = [
-                "mypy",
+                sys.executable, "-m", "mypy",
                 "--show-column-numbers",
                 "--no-error-summary",
                 "--check-untyped-defs",

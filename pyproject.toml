@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codecritique"
-version = "0.1.0"
+version = "0.1.2"
 description = "AI-assisted local code review and pre-push quality checks."
 readme = "README.md"
 license = "MIT"
@@ -15,6 +15,7 @@ requires-python = ">=3.10"
 dependencies = [
     "bandit>=1.9.0",
     "coverage>=7.6.0",
+    "google-genai>=1.0.0",
     "mypy>=1.13.0",
     "pydantic>=2.9.0",
     "requests>=2.32.0",
@@ -35,6 +36,10 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+cloud = [
+    "anthropic>=0.40.0",
+    "openai>=1.55.0",
+]
 dev = [
     "pytest>=8.3.0",
     "pytest-cov>=6.0.0",

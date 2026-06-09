@@ -1,6 +1,7 @@
 import subprocess
 import json
 import os
+import sys
 from typing import List
 from critique.checkers.base import BaseChecker, Issue, Severity
 
@@ -15,7 +16,9 @@ class CoverageChecker(BaseChecker):
         issues = []
         try:
             
-            cmd = ["coverage", "json", "-o", "-"] 
+            # `python -m coverage` instead of the bare exe: console-script
+            # launchers break silently when a venv is moved.
+            cmd = [sys.executable, "-m", "coverage", "json", "-o", "-"]
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode != 0:

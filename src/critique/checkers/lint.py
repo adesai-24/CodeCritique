@@ -1,6 +1,7 @@
 import os
 import subprocess
 import json
+import sys
 from typing import List
 from critique.checkers.base import BaseChecker, Issue, Severity
 
@@ -36,12 +37,15 @@ class RuffChecker(BaseChecker):
     description = "Fast Python linter."
 
     def run(self, files: List[str]) -> List[Issue]:
+        files = [f for f in files if f.endswith((".py", ".pyi"))]
         if not files:
             return []
 
         issues = []
         try:
-            cmd = ["ruff", "check", "--output-format=json"]
+            # `python -m ruff` so the tool is found even when the venv's
+            # console-script launchers are broken (e.g. after a venv move).
+            cmd = [sys.executable, "-m", "ruff", "check", "--output-format=json"]
             if not project_has_ruff_config():
                 cmd.append(f"--select={CURATED_RULES}")
             cmd += files
