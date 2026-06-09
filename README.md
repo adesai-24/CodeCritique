@@ -32,9 +32,13 @@ It reviews **Python** and **C/C++** out of the box.
   `.h`, `.hpp`, …). File selection detects the language automatically.
 - **Configurable language choice** — `auto` detects Python and C/C++ by
   extension, or set `python` / `cpp` under config to narrow reviews.
-- **Static analysis** — Ruff (style/correctness), Mypy (types), and Bandit
-  (security) for Python; `cppcheck` (memory safety, leaks, null derefs) for
-  C/C++.
+- **In-depth static analysis** — Ruff with a curated rule set (likely bugs,
+  simplifiable code, outdated idioms, complexity), Mypy (types, including
+  unannotated function bodies), Bandit (security), and a format check for
+  Python; `cppcheck` (memory safety, leaks, null derefs) for C/C++. Projects
+  with their own ruff config keep their settings.
+- **Auto-fix** — `codecritique fix` applies ruff's safe lint fixes and
+  reformats files in place; `--unsafe` opts into behavior-changing rewrites.
 - **Coverage check** — reads Coverage.py data and warns below the threshold.
 - **AI critic** — an LLM catches logic bugs, edge cases, and design issues the
   static tools miss.
@@ -46,6 +50,9 @@ It reviews **Python** and **C/C++** out of the box.
   or a self-hosted vLLM endpoint. Switch with one command.
 - **Saved reports + chat** — every run is saved locally; list past reports or
   chat with one to dig into findings.
+- **Agent-ready output** — `check --json` emits one machine-readable JSON
+  object on stdout with clean stream separation and `0`/`1` exit codes; see
+  [AGENTS.md](AGENTS.md).
 
 ---
 
@@ -321,6 +328,12 @@ It previews a unified diff and applies nothing by default. This step is
 intentionally **format-only** — it never fixes bugs, renames things, or alters
 logic.
 
+For deterministic, tool-based cleanup of Python (no AI involved), use
+`codecritique fix` instead: it applies ruff's safe lint fixes and `ruff format`
+directly to disk (see [CLI commands](#5-cli-commands)). A good workflow is
+`fix` for the mechanical issues, then `format` if you want the AI's
+review-ready restyling on top.
+
 ---
 
 ## 9. Style learning
@@ -467,6 +480,9 @@ reserve prompt edits for a contributor clone.
 
 - Coverage threshold: 80%
 - Incremental base: `origin/main`
+- Lint rules: curated ruff set `E,W,F,B,C4,SIM,UP,C90,RUF` when the project has
+  no ruff config of its own (`ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in
+  `pyproject.toml`); otherwise the project's configuration is respected
 - Default provider/model: `gemini` / `gemini-2.0-flash`
 - Language choice: `auto` (review all supported Python and C/C++ files)
 - Local model: `qwen2.5-coder:7b`; Ollama URL: `http://localhost:11434`
