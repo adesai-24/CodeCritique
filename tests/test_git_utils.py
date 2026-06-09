@@ -3,9 +3,10 @@ import subprocess
 from critique.git_utils import get_changed_files, install_pre_push_hook
 
 
-def test_get_changed_files_filters_py_and_existing(tmp_path, monkeypatch):
+def test_get_changed_files_filters_supported_and_existing(tmp_path, monkeypatch):
     (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / "b.txt").write_text("not python\n", encoding="utf-8")
+    (tmp_path / "main.cpp").write_text("int main() { return 0; }\n", encoding="utf-8")
     (tmp_path / "sub").mkdir()
     (tmp_path / "sub" / "c.py").write_text("y = 2\n", encoding="utf-8")
 
@@ -16,7 +17,7 @@ def test_get_changed_files_filters_py_and_existing(tmp_path, monkeypatch):
             self.stdout = stdout
 
     def fake_run(cmd, capture_output, text, check):
-        return Result("a.py\nb.txt\nsub/c.py\nmissing.py\n")
+        return Result("a.py\nb.txt\nmain.cpp\nsub/c.py\nmissing.py\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -24,8 +25,29 @@ def test_get_changed_files_filters_py_and_existing(tmp_path, monkeypatch):
 
     assert files == [
         str((tmp_path / "a.py").resolve()),
+        str((tmp_path / "main.cpp").resolve()),
         str((tmp_path / "sub" / "c.py").resolve()),
     ]
+
+
+def test_get_changed_files_respects_language_choice(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "main.cpp").write_text("int main() { return 0; }\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+
+    class Result:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    def fake_run(cmd, capture_output, text, check):
+        return Result("a.py\nmain.cpp\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    files = get_changed_files(language="cpp")
+
+    assert files == [str((tmp_path / "main.cpp").resolve())]
 
 
 def test_install_pre_push_hook_creates_hook(tmp_path, monkeypatch):

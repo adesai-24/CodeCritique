@@ -17,19 +17,33 @@ def test_extract_code_context_returns_expected_lines(tmp_path):
 
 def test_get_target_files_custom_files_returns_abs_paths(tmp_path):
     file_one = tmp_path / "a.py"
-    file_two = tmp_path / "b.py"
+    file_two = tmp_path / "b.cpp"
     file_one.write_text("x = 1\n", encoding="utf-8")
-    file_two.write_text("y = 2\n", encoding="utf-8")
+    file_two.write_text("int main() { return 0; }\n", encoding="utf-8")
 
     result = get_target_files(custom_files=[str(file_one), str(file_two)])
 
     assert result == [str(file_one.resolve()), str(file_two.resolve())]
 
 
+def test_get_target_files_custom_files_respects_language_choice(tmp_path):
+    py_file = tmp_path / "a.py"
+    cpp_file = tmp_path / "b.cpp"
+    py_file.write_text("x = 1\n", encoding="utf-8")
+    cpp_file.write_text("int main() { return 0; }\n", encoding="utf-8")
+
+    result = get_target_files(
+        custom_files=[str(py_file), str(cpp_file)],
+        language="cpp",
+    )
+
+    assert result == [str(cpp_file.resolve())]
+
+
 def test_get_target_files_incremental_no_changes(monkeypatch):
     from critique import runner
 
-    monkeypatch.setattr(runner, "get_changed_files", lambda: [])
+    monkeypatch.setattr(runner, "get_changed_files", lambda language="auto": [])
 
     assert runner.get_target_files(incremental=True, custom_files=None) == []
 
@@ -71,7 +85,7 @@ def test_scan_files_enriches_code_context(tmp_path, monkeypatch):
 def test_run_all_checks_incremental_no_files_returns_true(monkeypatch):
     from critique import runner
 
-    monkeypatch.setattr(runner, "get_target_files", lambda incremental, custom_files: [])
+    monkeypatch.setattr(runner, "get_target_files", lambda incremental, custom_files, language=None: [])
 
     assert runner.run_all_checks(incremental=True, custom_files=None, use_ai=False) is True
 
@@ -88,7 +102,7 @@ def test_run_all_checks_uses_print_report(monkeypatch):
         severity=Severity.WARNING,
     )
 
-    monkeypatch.setattr(runner, "get_target_files", lambda incremental, custom_files: ["x.py"])
+    monkeypatch.setattr(runner, "get_target_files", lambda incremental, custom_files, language=None: ["x.py"])
     monkeypatch.setattr(runner, "scan_files", lambda files, use_ai, **kwargs: [fake_issue])
 
     captured = {}

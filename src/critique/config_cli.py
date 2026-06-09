@@ -6,6 +6,7 @@ Examples
     codecritique config show
     codecritique config providers
     codecritique config set provider gemini
+    codecritique config language auto
     codecritique config set model gemini-2.0-flash
     codecritique config set-key gemini            # prompts, input hidden
     codecritique config set-key openai sk-...      # non-interactive
@@ -24,6 +25,7 @@ from critique import config as cfg_mod
 from critique import secrets_store
 from critique import profiles
 from critique.config import SUPPORTED_PROVIDERS
+from critique.languages import LANGUAGE_CHOICES
 
 console = Console()
 config_app = typer.Typer(help="View and edit CodeCritique configuration and API keys.")
@@ -49,6 +51,7 @@ def show() -> None:
     table.add_row("base_url", str(cfg.base_url or "[dim](provider default)[/dim]"))
     table.add_row("temperature", str(cfg.temperature))
     table.add_row("timeout", str(cfg.timeout))
+    table.add_row("language", cfg.language)
     table.add_row("suggestion_mode", cfg.suggestion_mode)
     table.add_row("project_context", _short(cfg.project_context))
     table.add_row("custom_instructions", _short(cfg.custom_instructions))
@@ -95,7 +98,7 @@ def providers() -> None:
 
 @config_app.command("set")
 def set_setting(
-    key: str = typer.Argument(..., help="Setting name (provider, model, base_url, temperature, timeout)."),
+    key: str = typer.Argument(..., help="Setting name (provider, model, base_url, temperature, timeout, language)."),
     value: str = typer.Argument(..., help="New value. Use 'none' to clear an optional setting."),
 ) -> None:
     """Set a configuration value."""
@@ -105,12 +108,53 @@ def set_setting(
             f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
         )
         raise typer.Exit(code=1)
+    if key == "language" and value.strip().lower() not in LANGUAGE_CHOICES:
+        console.print(
+            f"[red]Unknown language '{value}'.[/red] "
+            f"Supported: {', '.join(LANGUAGE_CHOICES)}"
+        )
+        raise typer.Exit(code=1)
     try:
         cfg = cfg_mod.set_value(key, value)
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
     console.print(f"[green]Set {key} = {getattr(cfg, key, cfg.extra.get(key))}[/green]")
+
+
+@config_app.command("languages")
+def languages() -> None:
+    """List supported language choices for review file selection."""
+    active = cfg_mod.load_config().language
+    table = Table(title="Language Choices", header_style="bold cyan")
+    table.add_column("Choice")
+    table.add_column("Effect")
+    rows = {
+        "auto": "Review every supported Python and C/C++ file.",
+        "python": "Review only Python files (.py, .pyi).",
+        "cpp": "Review only C/C++ files (.c, .cc, .cpp, .h, .hpp, ...).",
+    }
+    for key, description in rows.items():
+        marker = " [green]*[/green]" if key == active else ""
+        table.add_row(key + marker, description)
+    console.print(table)
+    console.print("[dim]Set one with: codecritique config language <choice>[/dim]")
+
+
+@config_app.command("language")
+def language(
+    choice: str = typer.Argument(..., help="Language choice: auto, python, or cpp."),
+) -> None:
+    """Set which language CodeCritique reviews by default."""
+    choice = choice.strip().lower()
+    if choice not in LANGUAGE_CHOICES:
+        console.print(
+            f"[red]Unknown language '{choice}'.[/red] "
+            f"Supported: {', '.join(LANGUAGE_CHOICES)}"
+        )
+        raise typer.Exit(code=1)
+    cfg_mod.set_value("language", choice)
+    console.print(f"[green]Language choice set to '{choice}'.[/green]")
 
 
 @config_app.command("set-key")

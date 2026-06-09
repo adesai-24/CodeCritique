@@ -24,7 +24,7 @@ console = Console()
 def check(
     files: Optional[list[str]] = typer.Argument(None, help="Specific files to check."),
     incremental: bool = typer.Option(True, help="Only check changed files (git diff)."),
-    ai: bool = typer.Option(True, help="Use AI Critic + enrichment + synthesis (requires Ollama)."),
+    ai: bool = typer.Option(True, help="Use AI Critic + enrichment + synthesis (requires a configured AI provider)."),
     learn: Optional[bool] = typer.Option(
         None,
         "--learn/--no-learn",
@@ -37,8 +37,8 @@ def check(
 
     Pass --no-ai to skip AI features and use fast static-only mode.
     Pass --learn to nudge your coding-style profile from the files reviewed
-    this run (see also `codecritique style auto`). Ollama must be running for
-    AI features: ollama serve
+    this run (see also `codecritique style auto`). An AI provider must be
+    configured and reachable for AI features.
     """
     success = run_all_checks(
         incremental=incremental, custom_files=files, use_ai=ai, learn=learn

@@ -27,6 +27,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from critique.languages import LANGUAGE_CHOICES
+
 # ---------------------------------------------------------------------------
 # Locations
 # ---------------------------------------------------------------------------
@@ -65,6 +67,7 @@ class CritiqueConfig:
     base_url: Optional[str] = None       # for ollama / vllm / openai-compatible
     temperature: float = 0.2
     timeout: int = 300
+    language: str = "auto"              # auto, python, or cpp
     # Review customization (see critique.profiles).
     suggestion_mode: str = "balanced"    # built-in review profile
     project_context: Optional[str] = None    # author-provided context for the AI
@@ -118,6 +121,11 @@ def _apply_env_overrides(cfg: CritiqueConfig) -> CritiqueConfig:
     base_url = os.environ.get("CODECRITIQUE_BASE_URL")
     if base_url:
         cfg.base_url = base_url
+    language = os.environ.get("CODECRITIQUE_LANGUAGE")
+    if language:
+        language = language.strip().lower()
+        if language in LANGUAGE_CHOICES:
+            cfg.language = language
     temperature = os.environ.get("CODECRITIQUE_TEMPERATURE")
     if temperature:
         try:
@@ -201,6 +209,13 @@ def _convert_scalar(key: str, value: Any) -> Any:
         return str(value).strip().lower() in _TRUE_WORDS
     if key == "provider" and isinstance(value, str):
         return value.strip().lower()
+    if key == "language" and isinstance(value, str):
+        language = value.strip().lower()
+        if language not in LANGUAGE_CHOICES:
+            raise ValueError(
+                f"Unknown language '{value}'. Supported: {', '.join(LANGUAGE_CHOICES)}"
+            )
+        return language
     if isinstance(value, str) and value.lower() in {"none", "null", ""}:
         return None
     return value

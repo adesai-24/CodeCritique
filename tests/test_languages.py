@@ -5,7 +5,9 @@ from critique.languages import (
     PYTHON,
     SUPPORTED_EXTENSIONS,
     detect_language,
+    extensions_for_choice,
     is_supported,
+    is_supported_for_choice,
     language_for_key,
 )
 
@@ -41,3 +43,17 @@ def test_language_for_key():
     assert language_for_key("python") is PYTHON
     assert language_for_key("cpp") is CPP
     assert language_for_key("rust") is None
+
+
+def test_extensions_for_choice():
+    assert ".py" in extensions_for_choice("auto")
+    assert ".cpp" in extensions_for_choice("auto")
+    assert extensions_for_choice("python") == PYTHON.extensions
+    assert extensions_for_choice("cpp") == CPP.extensions
+
+
+def test_is_supported_for_choice_filters_by_language():
+    assert is_supported_for_choice("main.cpp", "cpp")
+    assert not is_supported_for_choice("main.cpp", "python")
+    assert is_supported_for_choice("script.py", "python")
+    assert not is_supported_for_choice("script.py", "cpp")
