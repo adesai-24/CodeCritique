@@ -89,6 +89,21 @@ Run with AI features disabled (static analysis only, no Ollama required):
 codecritique check --no-ai
 ```
 
+### Machine-Readable Output (AI Agents & CI)
+
+`--json` prints a single JSON object to stdout and routes all progress/status
+messages to stderr, so the output is safe to pipe or parse:
+
+```bash
+codecritique check --json --no-ai
+```
+
+The payload contains `passed`, `files_checked`, `issues` (file, line, code,
+severity, reasoning, suggested fix, code context), and the `synthesis` summary.
+Exit code is `0` when no FATAL issues were found and `1` otherwise.
+
+See [AGENTS.md](AGENTS.md) for the full JSON schema and agent usage guide.
+
 ### AI Report Output
 
 When Ollama is running, `critique check` produces a curated AI report instead of a raw issue list:

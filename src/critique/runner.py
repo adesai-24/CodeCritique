@@ -1,22 +1,25 @@
 import glob
+import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from critique.git_utils import get_changed_files
-from critique.checkers.base import Issue
+from critique.checkers.base import Issue, Severity
 from critique.checkers.lint import RuffChecker
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
 from critique.report import print_report, print_ai_report
-from critique.persistence import fallback_synthesis, save_report
+from critique.persistence import fallback_synthesis, issue_to_dict, save_report
 
-console = Console()
+# Status/progress messages go to stderr so stdout stays clean for reports
+# and machine-readable JSON output.
+console = Console(stderr=True)
 _DEFAULT_CHECKER_WORKERS = 4
 
 
@@ -27,14 +30,35 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def save_report_notice(synth: dict, issues: List[Issue]) -> None:
+def save_report_notice(synth: dict, issues: List[Issue]) -> Optional[Dict[str, Any]]:
     """Persist a review report without letting storage errors fail a check run."""
     try:
         saved = save_report(synth, issues)
     except Exception as exc:
         console.print(f"[yellow]Could not save review report: {exc}[/yellow]")
-        return
+        return None
     console.print(f"[dim]Saved review as {saved['id']}[/dim]")
+    return saved
+
+
+def emit_json_report(
+    files: List[str],
+    issues: List[Issue],
+    synth: Dict[str, Any],
+    report_id: Optional[str] = None,
+) -> bool:
+    """Print a machine-readable result to stdout. Returns True if no FATAL issues."""
+    passed = not any(issue.severity == Severity.FATAL for issue in issues)
+    payload = {
+        "passed": passed,
+        "files_checked": files,
+        "issue_count": len(issues),
+        "issues": [issue_to_dict(issue) for issue in issues],
+        "synthesis": synth,
+        "report_id": report_id,
+    }
+    sys.stdout.write(json.dumps(payload, indent=2) + "\n")
+    return passed
 
 
 def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> List[str]:
@@ -115,6 +139,7 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         transient=True,
+        console=console,
     ) as progress:
         max_workers = max(
             1,
@@ -158,22 +183,26 @@ def run_all_checks(
     incremental: bool = True,
     custom_files: Optional[List[str]] = None,
     use_ai: bool = True,
+    emit_json: bool = False,
 ) -> bool:
     """
     Orchestrate the full check pipeline.
 
     Returns True if the push is allowed (no FATAL issues), False otherwise.
-    Phase 4 will swap print_report() for print_ai_report() when use_ai=True.
+    With emit_json=True, prints a machine-readable JSON result to stdout
+    instead of the rich terminal report.
     """
     files = get_target_files(incremental, custom_files)
-    if not files and incremental and not custom_files:
-        return True
-    if not files and not incremental:
-        console.print("[yellow]No python files found.[/yellow]")
+    if not files:
+        if not incremental:
+            console.print("[yellow]No python files found.[/yellow]")
+        if emit_json:
+            return emit_json_report([], [], fallback_synthesis([]))
         return True
 
     all_issues = scan_files(files, use_ai=use_ai)
 
+    synth: Optional[Dict[str, Any]] = None
     if use_ai:
         try:
             from critique.ai.client import LLMClient
@@ -184,12 +213,22 @@ def run_all_checks(
                 if all_issues:
                     all_issues = enrich_issues(all_issues, llm)
                 synth = AISynthesizer(llm).synthesize(all_issues)
-                save_report_notice(synth, all_issues)
-                return print_ai_report(synth, all_issues)
             else:
                 console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
         except Exception as exc:
             console.print(f"[yellow]AI report failed ({exc}) — falling back to basic report.[/yellow]")
 
-    save_report_notice(fallback_synthesis(all_issues), all_issues)
+    ai_synthesis = synth is not None
+    if synth is None:
+        synth = fallback_synthesis(all_issues)
+
+    saved = save_report_notice(synth, all_issues)
+
+    if emit_json:
+        return emit_json_report(
+            files, all_issues, synth,
+            report_id=saved.get("id") if saved else None,
+        )
+    if ai_synthesis:
+        return print_ai_report(synth, all_issues)
     return print_report(all_issues)

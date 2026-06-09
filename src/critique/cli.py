@@ -18,18 +18,28 @@ def check(
     files: Optional[list[str]] = typer.Argument(None, help="Specific files to check."),
     incremental: bool = typer.Option(True, help="Only check changed files (git diff)."),
     ai: bool = typer.Option(True, help="Use AI Critic + enrichment + synthesis (requires Ollama)."),
+    json_output: bool = typer.Option(
+        False, "--json",
+        help="Print a machine-readable JSON result to stdout (status messages go to stderr).",
+    ),
 ):
     """
     Run all configured checks (Lint, Types, Security, AI Review).
 
     Pass --no-ai to skip AI features and use fast static-only mode.
     Ollama must be running for AI features: ollama serve
+
+    Exit codes: 0 = passed (no FATAL issues), 1 = failed.
     """
-    success = run_all_checks(incremental=incremental, custom_files=files, use_ai=ai)
+    success = run_all_checks(
+        incremental=incremental, custom_files=files, use_ai=ai, emit_json=json_output
+    )
     if not success:
-        typer.echo("Checks failed. Fix the issues or use --no-verify to bypass (not recommended).")
+        if not json_output:
+            typer.echo("Checks failed. Fix the issues or use --no-verify to bypass (not recommended).")
         raise typer.Exit(code=1)
-    typer.echo("All checks passed!")
+    if not json_output:
+        typer.echo("All checks passed!")
 
 @app.command()
 def install_hooks():

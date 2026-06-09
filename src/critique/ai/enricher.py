@@ -31,7 +31,8 @@ from critique.ai.client import LLMClient
 from critique.ai.prompts import BATCH_ENRICHER_SYSTEM, ENRICHER_SYSTEM
 from critique.ai.schemas import BATCH_ENRICHMENT_SCHEMA, ENRICHMENT_SCHEMA
 
-console = Console()
+# Progress/status output goes to stderr so stdout stays clean for JSON mode.
+console = Console(stderr=True)
 
 _MAX_WORKERS = 4
 
@@ -216,6 +217,7 @@ def enrich_issues(issues: List[Issue], llm: LLMClient) -> List[Issue]:
         BarColumn(),
         TaskProgressColumn(),
         transient=True,
+        console=console,
     ) as progress:
         task = progress.add_task(
             f"Enriching {len(nontrivial_issues)} finding(s) with AI"
