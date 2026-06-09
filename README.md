@@ -77,23 +77,23 @@ project repo stays clean.
 **Recommended — isolated global install with [pipx](https://pipx.pypa.io):**
 
 ```bash
-pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"
+pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"
 ```
 
 pipx puts the `codecritique` command on your PATH in its own private
 environment, so it never touches your project's dependencies.
 
-Upgrade to a newer release tag by replacing `v0.1.1` with the release you want:
+Upgrade to a newer release tag by replacing `v0.1.2` with the release you want:
 
 ```bash
 pipx uninstall codecritique
-pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"
+pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"
 ```
 
 **Or — into an existing virtual environment with pip:**
 
 ```bash
-pip install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"
+pip install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"
 ```
 
 Either way you get two equivalent commands: `codecritique` (and the legacy
@@ -130,11 +130,13 @@ choco install cppcheck             # Windows
 
 ### Optional extras
 
-Add extras to the same single-line install (here with pipx; for a plain venv use
-`pip install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"`):
+Gemini support is included in the base install because Gemini is the default
+hosted provider. Add extras only if you want OpenAI or Anthropic SDK support
+(here with pipx; for a plain venv use
+`pip install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"`):
 
 ```bash
-pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"  # Gemini / OpenAI / Anthropic / vLLM SDKs
+pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.2"  # OpenAI / Anthropic SDKs
 ```
 
 From a clone you can use the shorthand `pip install -e ".[cloud]"` or
@@ -209,8 +211,8 @@ CodeCritique's AI pipeline is **provider-agnostic**. It defaults to Google
 | `anthropic` | `claude-3-5-haiku-latest` | yes | Hosted Claude |
 | `vllm` | `Qwen/Qwen2.5-Coder-7B-Instruct` | optional | Self-hosted, OpenAI-compatible |
 
-Cloud providers need the extra SDKs — install with the `[cloud]` extra (see
-[Optional extras](#optional-extras)).
+Gemini support ships in the base install. OpenAI and Anthropic need the extra
+SDKs — install with the `[cloud]` extra (see [Optional extras](#optional-extras)).
 
 ### Configure a provider and key
 

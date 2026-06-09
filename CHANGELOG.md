@@ -2,6 +2,14 @@
 
 All notable changes to CodeCritique will be documented in this file.
 
+## 0.1.2 - 2026-06-09
+
+- Include `google-genai` in the base install because Gemini is the default
+  hosted provider. Users no longer need the `[cloud]` extra for the default AI
+  path.
+- Update Gemini provider guidance and documentation so the `[cloud]` extra is
+  only needed for OpenAI / Anthropic SDK support.
+
 ## 0.1.1 - 2026-06-09
 
 - Add configurable language selection under `codecritique config`:

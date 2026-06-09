@@ -2,9 +2,8 @@
 Google Gemini provider (default, free tier) built on the official
 ``google-genai`` SDK.
 
-The SDK is imported lazily so the package is only required when a user actually
-selects Gemini — installing CodeCritique without the ``cloud`` extra still works
-for the Ollama-only path.
+Gemini is CodeCritique's default hosted provider, so ``google-genai`` is part of
+the base install rather than an optional extra.
 """
 
 from __future__ import annotations
@@ -34,8 +33,8 @@ class GeminiProvider(Provider):
             from google import genai  # type: ignore
         except ImportError as exc:  # pragma: no cover - environment dependent
             raise ProviderError(
-                "The google-genai package is required for the Gemini provider. "
-                "Install it with: pip install 'codecritique[cloud]'"
+                "The google-genai package is missing from this install. "
+                "Reinstall CodeCritique from the latest release."
             ) from exc
         self._client = genai.Client(api_key=self._api_key)
         return self._client
@@ -89,7 +88,7 @@ class GeminiProvider(Provider):
         from google.genai import types  # type: ignore
 
         client = self._get_client()
-        # Map our role/content history to Gemini "contents".  Gemini uses
+        # Map our role/content history to Gemini "contents". Gemini uses
         # "model" instead of "assistant".
         contents = []
         for msg in history:
