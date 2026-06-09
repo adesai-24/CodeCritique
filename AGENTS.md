@@ -70,8 +70,12 @@ Recommendations:
   the curated rule set `E,W,F,B,C4,SIM,UP,C90,RUF`; otherwise the project's own
   config wins. `FMT001` (INFO) means `codecritique fix` would reformat the file.
 
-Other commands: `codecritique format` (AI-driven, behavior-preserving
-reformatter with diff preview), `codecritique list` (saved reports),
+Other commands: `codecritique ask "<question>"` (plain-English capability
+Q&A), `codecritique do "<instruction>" [--yes]` (plain-English request ->
+whitelisted action plan -> confirm -> run; actions: check, fix, format,
+list_reports, install_hooks), `codecritique format` (AI-driven,
+behavior-preserving reformatter with diff preview), `codecritique list`
+(saved reports),
 `codecritique chat --last` (interactive Q&A about a report; needs an AI
 provider), `codecritique config` (provider/key/language/review-mode settings),
 `codecritique style` (personal style profiles), `codecritique cache` (AI cache
@@ -90,7 +94,8 @@ management), `codecritique install-hooks` (git pre-push hook).
 
 Layout:
 
-- `src/critique/cli.py` — Typer CLI (`check`, `fix`, `format`, `list`, `chat`, `install-hooks`, plus `config`/`cache`/`style` sub-apps)
+- `src/critique/cli.py` — Typer CLI (`check`, `fix`, `format`, `ask`, `do`, `list`, `chat`, `install-hooks`, plus `config`/`cache`/`style` sub-apps)
+- `src/critique/assistant.py` — natural-language layer: CLI manifest for `ask`, whitelisted action plans for `do`
 - `src/critique/runner.py` — orchestration: file selection, checker fan-out, fix pipeline, report dispatch
 - `src/critique/checkers/` — one checker per file; all implement `BaseChecker.run(files) -> List[Issue]`
 - `src/critique/ai/` — provider-agnostic LLM client (with caching), providers/, critic prompts/schemas, enricher, synthesizer

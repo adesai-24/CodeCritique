@@ -2,8 +2,19 @@
 
 All notable changes to CodeCritique will be documented in this file.
 
-## Unreleased
+## 0.2.0 - 2026-06-09
 
+- Add a natural-language assistant backed by the configured AI provider:
+  - `codecritique ask "<question>"` answers capability questions, grounded in
+    a manifest generated from the real CLI so it cannot invent commands.
+  - `codecritique do "<instruction>"` translates plain English into a plan of
+    whitelisted actions (check, fix, format, list_reports, install_hooks),
+    shows the plan, and runs it only after confirmation (`--yes` to skip).
+- Document shell tab-completion (`codecritique --install-completion`) for
+  bash, zsh, fish, and PowerShell.
+- Run ruff, mypy, bandit, and coverage via `python -m` so checks cannot
+  silently lose findings when a virtualenv's console-script launchers break
+  (e.g. after the venv directory is moved).
 - Add `codecritique fix`: applies ruff's safe lint fixes and reformats files
   in place (`--unsafe` opts into behavior-changing fixes).
 - Deepen static analysis: curated ruff rule set (bugbear, simplify,

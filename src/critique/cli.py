@@ -177,6 +177,80 @@ def install_hooks():
     install_pre_push_hook()
 
 
+@app.command()
+def ask(
+    question: List[str] = typer.Argument(..., help="A question about what CodeCritique can do."),
+):
+    """
+    Ask the AI assistant about CodeCritique's capabilities, in plain English.
+
+    Example: codecritique ask how do I review only one file without AI
+    """
+    llm = LLMClient()
+    if not llm.is_available():
+        console.print(f"[red]{llm.unavailable_message()}[/red]")
+        raise typer.Exit(code=1)
+
+    from critique.assistant import answer_question
+
+    try:
+        answer = answer_question(" ".join(question), llm)
+    except Exception as exc:
+        console.print(f"[red]Could not get an answer: {exc}[/red]")
+        raise typer.Exit(code=1)
+    console.print(answer)
+
+
+@app.command()
+def do(
+    instruction: List[str] = typer.Argument(..., help="What you want done, in plain English."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Run the plan without asking for confirmation."),
+):
+    """
+    Tell CodeCritique what to do in plain English; it plans and runs the
+    matching commands (check, fix, format, ...) after showing you the plan.
+
+    Example: codecritique do clean up my changed files then run a full check
+    """
+    llm = LLMClient()
+    if not llm.is_available():
+        console.print(f"[red]{llm.unavailable_message()}[/red]")
+        raise typer.Exit(code=1)
+
+    from critique.assistant import describe_plan, plan_actions, run_plan, validate_plan
+
+    try:
+        raw = plan_actions(" ".join(instruction), llm)
+    except Exception as exc:
+        console.print(f"[red]Could not plan that request: {exc}[/red]")
+        raise typer.Exit(code=1)
+
+    steps, problems = validate_plan(raw)
+    for problem in problems:
+        console.print(f"[yellow]{problem}[/yellow]")
+
+    reply = str(raw.get("reply", "")).strip()
+    if reply:
+        console.print(f"[cyan]{reply}[/cyan]")
+
+    if not steps:
+        console.print("[yellow]Nothing to run for that request.[/yellow]")
+        raise typer.Exit(code=0)
+
+    console.print("\n[bold]Plan:[/bold]")
+    for line in describe_plan(steps):
+        # markup=False so model-derived arg values can't inject Rich tags.
+        console.print(f"  {line}", markup=False)
+
+    if not yes and not typer.confirm("Run this plan?"):
+        console.print("[dim]Cancelled.[/dim]")
+        raise typer.Exit(code=0)
+
+    if not run_plan(steps):
+        raise typer.Exit(code=1)
+    console.print("[bold green]Plan completed.[/bold green]")
+
+
 @app.command("list")
 def list_saved_reports():
     """Show recently saved review reports."""
