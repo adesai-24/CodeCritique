@@ -77,17 +77,23 @@ project repo stays clean.
 **Recommended — isolated global install with [pipx](https://pipx.pypa.io):**
 
 ```bash
-pipx install git+https://github.com/adesai-24/CodeCritique.git
+pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"
 ```
 
 pipx puts the `codecritique` command on your PATH in its own private
-environment, so it never touches your project's dependencies. Upgrade later
-with `pipx upgrade codecritique`.
+environment, so it never touches your project's dependencies.
+
+Upgrade to a newer release tag by replacing `v0.1.1` with the release you want:
+
+```bash
+pipx uninstall codecritique
+pipx install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"
+```
 
 **Or — into an existing virtual environment with pip:**
 
 ```bash
-pip install git+https://github.com/adesai-24/CodeCritique.git
+pip install "git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"
 ```
 
 Either way you get two equivalent commands: `codecritique` (and the legacy
@@ -125,10 +131,10 @@ choco install cppcheck             # Windows
 ### Optional extras
 
 Add extras to the same single-line install (here with pipx; for a plain venv use
-`pip install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git"`):
+`pip install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"`):
 
 ```bash
-pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git"  # Gemini / OpenAI / Anthropic / vLLM SDKs
+pipx install "codecritique[cloud] @ git+https://github.com/adesai-24/CodeCritique.git@v0.1.1"  # Gemini / OpenAI / Anthropic / vLLM SDKs
 ```
 
 From a clone you can use the shorthand `pip install -e ".[cloud]"` or

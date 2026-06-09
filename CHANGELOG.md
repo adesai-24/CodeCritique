@@ -2,7 +2,16 @@
 
 All notable changes to CodeCritique will be documented in this file.
 
-## 0.1.0 - Unreleased
+## 0.1.1 - 2026-06-09
+
+- Add configurable language selection under `codecritique config`:
+  `auto`, `python`, or `cpp`. The setting controls incremental checks,
+  full-repository scans, and explicit file lists without adding a per-run
+  `--language` flag.
+- Add `CODECRITIQUE_LANGUAGE` for one-off environment overrides.
+- Clarify release/tag-based `pipx` upgrade guidance in the documentation.
+
+## 0.1.0 - 2026-06-09
 
 - **Adaptive style learning ("learn as you review")**: opt-in mode where every
   `codecritique check` nudges your saved style profile toward the files it just
