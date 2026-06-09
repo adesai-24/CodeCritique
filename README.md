@@ -2,7 +2,7 @@
 
 CodeCritique is an AI-assisted local code review tool. It combines static
 analysis, optional local or cloud AI synthesis, saved review history, and a
-browser demo into one workflow you run **before** you push code.
+pre-push CLI workflow you run **before** you push code.
 
 It reviews **Python** and **C/C++** out of the box.
 
@@ -30,6 +30,8 @@ It reviews **Python** and **C/C++** out of the box.
 
 - **Multi-language review** — Python and C/C++ (`.c`, `.cc`, `.cpp`, `.cxx`,
   `.h`, `.hpp`, …). File selection detects the language automatically.
+- **Configurable language choice** — `auto` detects Python and C/C++ by
+  extension, or set `python` / `cpp` under config to narrow reviews.
 - **Static analysis** — Ruff (style/correctness), Mypy (types), and Bandit
   (security) for Python; `cppcheck` (memory safety, leaks, null derefs) for
   C/C++.
@@ -163,7 +165,7 @@ check and blocks the push if there are fatal findings (bypass with
 
 ```bash
 codecritique check                       # review changed files on this branch
-codecritique check src/app.py tests/...  # review specific files
+codecritique check src/app.py main.cpp   # review specific files
 codecritique check --no-incremental      # review the whole repo
 codecritique check --no-ai               # static analysis only
 codecritique check --learn               # also adapt your style profile (see §9)
@@ -171,6 +173,8 @@ codecritique check --learn               # also adapt your style profile (see §
 codecritique install-hooks               # install the Git pre-push hook
 codecritique format                      # reshape code for review (see §8)
 
+codecritique config languages            # list language choices
+codecritique config language cpp         # review only C/C++ files
 codecritique list                        # list saved reports
 codecritique chat --last                 # chat with the most recent report
 codecritique chat rev_abc123             # chat with a specific report
@@ -181,7 +185,8 @@ codecritique cache stats                 # AI cache size / entries
 
 Findings are bucketed as `FATAL`, `WARNING`, or `INFO`. Only `FATAL` blocks a
 push by default (see [Review modes](#7-review-modes--project-context) to change
-that).
+that). There is no per-run `--language` option; set the default once with
+`codecritique config language auto|python|cpp`.
 
 ---
 
@@ -206,6 +211,8 @@ Cloud providers need the extra SDKs — install with the `[cloud]` extra (see
 ```bash
 codecritique config providers          # list supported providers
 codecritique config show               # show what's active
+codecritique config languages          # list language choices
+codecritique config language cpp       # auto, python, or cpp
 
 codecritique config set-key gemini     # set a key (input hidden)
 codecritique config set provider openai
@@ -435,6 +442,7 @@ reserve prompt edits for a contributor clone.
 - Coverage threshold: 80%
 - Incremental base: `origin/main`
 - Default provider/model: `gemini` / `gemini-2.0-flash`
+- Language choice: `auto` (review all supported Python and C/C++ files)
 - Local model: `qwen2.5-coder:7b`; Ollama URL: `http://localhost:11434`
 - AI cache: enabled
 - Saved report limit: 50
@@ -449,6 +457,7 @@ for CI:
 | `CODECRITIQUE_PROVIDER` | Override the active provider |
 | `CODECRITIQUE_MODEL` | Override the model |
 | `CODECRITIQUE_BASE_URL` | Override the endpoint (ollama / vllm / openai-compatible) |
+| `CODECRITIQUE_LANGUAGE` | Override language choice (`auto`, `python`, `cpp`) |
 | `CODECRITIQUE_TEMPERATURE` | Override sampling temperature |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Provider API keys (preferred for CI) |
 

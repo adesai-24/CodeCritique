@@ -53,6 +53,8 @@ CPP = Language(
 )
 
 LANGUAGES: Tuple[Language, ...] = (PYTHON, CPP)
+LANGUAGE_KEYS: Tuple[str, ...] = tuple(lang.key for lang in LANGUAGES)
+LANGUAGE_CHOICES: Tuple[str, ...] = ("auto",) + LANGUAGE_KEYS
 
 # extension (lower-case, with dot) -> Language
 _EXT_MAP: Dict[str, Language] = {
@@ -74,7 +76,25 @@ def is_supported(path: str) -> bool:
 
 
 def language_for_key(key: str) -> Optional[Language]:
+    key = key.strip().lower()
     for lang in LANGUAGES:
         if lang.key == key:
             return lang
     return None
+
+
+def extensions_for_choice(language: str = "auto") -> Tuple[str, ...]:
+    """Return reviewable extensions for a configured language choice."""
+    language = (language or "auto").strip().lower()
+    if language == "auto":
+        return SUPPORTED_EXTENSIONS
+    lang = language_for_key(language)
+    if lang is None:
+        raise ValueError(
+            f"Unknown language '{language}'. Supported: {', '.join(LANGUAGE_CHOICES)}"
+        )
+    return lang.extensions
+
+
+def is_supported_for_choice(path: str, language: str = "auto") -> bool:
+    return Path(path).suffix.lower() in extensions_for_choice(language)

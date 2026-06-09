@@ -55,27 +55,36 @@ def extract_code_context(file_path: str, line: int, context_lines: int = 3) -> L
 def get_target_files(
     incremental: bool = True,
     custom_files: Optional[List[str]] = None,
+    language: Optional[str] = None,
 ) -> List[str]:
     """Resolve which files to check based on the active mode."""
     bin_dir = os.path.join(sys.prefix, "Scripts" if os.name == "nt" else "bin")
     os.environ["PATH"] = bin_dir + os.pathsep + os.environ["PATH"]
+    if language is None:
+        from critique.config import load_config
+        language = load_config().language
 
     if custom_files:
-        files = [os.path.abspath(f) for f in custom_files]
+        from critique.languages import is_supported_for_choice
+        files = [
+            os.path.abspath(f)
+            for f in custom_files
+            if is_supported_for_choice(f, language)
+        ]
         console.print(f"[bold blue]Checking {len(files)} target file(s)...[/bold blue]")
         return files
 
     if incremental:
-        files = get_changed_files()
+        files = get_changed_files(language=language)
         if not files:
             console.print("[bold green]No supported files changed. Skipping checks.[/bold green]")
             return []
         console.print(f"[bold blue]Checking {len(files)} changed file(s)...[/bold blue]")
         return files
 
-    from critique.languages import SUPPORTED_EXTENSIONS
+    from critique.languages import extensions_for_choice
     files = []
-    for ext in SUPPORTED_EXTENSIONS:
+    for ext in extensions_for_choice(language):
         files.extend(glob.glob(f"**/*{ext}", recursive=True))
     files = [f for f in files if "site-packages" not in f and "venv" not in f and ".venv" not in f]
     return [os.path.abspath(f) for f in files]
@@ -200,11 +209,11 @@ def run_all_checks(
             f"{custom_instructions}\n\n{style_note}" if custom_instructions else style_note
         )
 
-    files = get_target_files(incremental, custom_files)
+    files = get_target_files(incremental, custom_files, cfg.language)
     if not files and incremental and not custom_files:
         return True
     if not files and not incremental:
-        console.print("[yellow]No python files found.[/yellow]")
+        console.print("[yellow]No supported files found.[/yellow]")
         return True
 
     all_issues = scan_files(

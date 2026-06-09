@@ -44,9 +44,16 @@ def test_save_and_load_roundtrip(cfg_path):
 def test_set_value_updates_typed_field(cfg_path):
     cfg_mod.set_value("provider", "anthropic", cfg_path)
     cfg_mod.set_value("temperature", "0.7", cfg_path)
+    cfg_mod.set_value("language", "cpp", cfg_path)
     loaded = cfg_mod.load_config(cfg_path)
     assert loaded.provider == "anthropic"
     assert loaded.temperature == 0.7
+    assert loaded.language == "cpp"
+
+
+def test_set_value_rejects_unknown_language(cfg_path):
+    with pytest.raises(ValueError):
+        cfg_mod.set_value("language", "rust", cfg_path)
 
 
 def test_set_value_unknown_key_goes_to_extra(cfg_path):
@@ -73,6 +80,13 @@ def test_env_override_provider(cfg_path, monkeypatch):
     monkeypatch.setenv("CODECRITIQUE_PROVIDER", "anthropic")
     cfg = cfg_mod.load_config(cfg_path)
     assert cfg.provider == "anthropic"
+
+
+def test_env_override_language(cfg_path, monkeypatch):
+    cfg_mod.save_config(CritiqueConfig(language="python"), cfg_path)
+    monkeypatch.setenv("CODECRITIQUE_LANGUAGE", "cpp")
+    cfg = cfg_mod.load_config(cfg_path)
+    assert cfg.language == "cpp"
 
 
 def test_unknown_top_level_key_preserved(cfg_path):

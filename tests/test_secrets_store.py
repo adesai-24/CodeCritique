@@ -29,6 +29,8 @@ def test_set_and_get_key(secrets_path):
 
 
 def test_secrets_file_permissions_locked(secrets_path):
+    if os.name == "nt":
+        pytest.skip("Windows does not report POSIX 0600 semantics reliably.")
     secrets_store.set_api_key("gemini", "k", secrets_path)
     mode = stat.S_IMODE(os.stat(secrets_path).st_mode)
     # Owner-only read/write (group/other have no access).
