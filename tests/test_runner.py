@@ -60,10 +60,11 @@ def test_scan_files_enriches_code_context(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "BanditChecker", FakeChecker)
     monkeypatch.setattr(runner, "MypyChecker", FakeChecker)
     monkeypatch.setattr(runner, "CoverageChecker", FakeChecker)
+    monkeypatch.setattr(runner, "FormatChecker", FakeChecker)
 
     issues = runner.scan_files([str(file_path)], use_ai=False)
 
-    assert len(issues) == 4
+    assert len(issues) == 5
     assert all(issue.code_context for issue in issues)
     assert all("b = 2" in "".join(issue.code_context) for issue in issues)
 
@@ -103,3 +104,35 @@ def test_run_all_checks_uses_print_report(monkeypatch):
 
     assert result is False
     assert captured["issues"] == [fake_issue]
+
+
+def test_build_review_context_describes_run():
+    from critique import runner
+
+    context = runner.build_review_context(["a.py", "b.py"], incremental=True, custom_files=None)
+
+    assert context["file_count"] == 2
+    assert "changed" in context["mode"]
+    assert context["project"]
+
+
+def test_emit_json_report_fatal_fails(capsys):
+    import json as json_mod
+
+    from critique import runner
+
+    fatal = Issue(
+        file_path="x.py", line=1, column=0,
+        message="boom", code="E999", severity=Severity.FATAL,
+    )
+    synth = {"summary": "s", "fix_first": 0, "critical": [0],
+             "warnings": [], "suggestions": [], "whats_good": []}
+
+    passed = runner.emit_json_report(["x.py"], [fatal], synth, report_id="rev_x")
+
+    assert passed is False
+    payload = json_mod.loads(capsys.readouterr().out)
+    assert payload["passed"] is False
+    assert payload["issue_count"] == 1
+    assert payload["issues"][0]["severity"] == "FATAL"
+    assert payload["report_id"] == "rev_x"

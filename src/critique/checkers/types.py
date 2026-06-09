@@ -13,7 +13,14 @@ class MypyChecker(BaseChecker):
         
         issues = []
         try:
-            cmd = ["mypy", "--show-column-numbers", "--no-error-summary"] + files
+            # --check-untyped-defs analyzes the bodies of unannotated functions
+            # too, instead of silently skipping them.
+            cmd = [
+                "mypy",
+                "--show-column-numbers",
+                "--no-error-summary",
+                "--check-untyped-defs",
+            ] + files
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             # Output format: file:line:col: error: message

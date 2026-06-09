@@ -4,10 +4,17 @@ CodeCritique is a local development tool designed to evaluate your code before y
 
 ## Features
 
-- **Integrated Linting**: Uses `Ruff` for style and error checking.
-- **Type Checking**: Uses `Mypy` for static type analysis.
+- **In-Depth Linting**: Uses `Ruff` with a curated rule set that goes far beyond
+  the defaults — likely bugs (`bugbear`), simplifiable code, outdated idioms,
+  comprehension rewrites, and complexity limits. If your project has its own
+  ruff configuration, CodeCritique respects it instead of imposing its own.
+- **Type Checking**: Uses `Mypy` for static type analysis, including the bodies
+  of unannotated functions (`--check-untyped-defs`).
 - **Security Auditing**: Uses `Bandit` to find common security vulnerabilities.
 - **Coverage Reports**: Checks test coverage using `Coverage.py`.
+- **Format Checking + Auto-Fix**: Flags files `ruff format` would rewrite, and
+  `codecritique fix` transforms them in place — safe lint fixes plus consistent
+  formatting in one command.
 - **Incremental Checking**: Optionally checks only the files that have changed in your current branch.
 - **Severity Levels**: Categorizes issues into "Fatal" (blocks pushes) and "Warnings" (actionable feedback).
 - **AI Critic** *(new)*: Reviews each file with a local LLM (`qwen2.5-coder:7b` via Ollama) to catch logic bugs, edge cases, and design issues that static tools miss.
@@ -88,6 +95,19 @@ Run with AI features disabled (static analysis only, no Ollama required):
 ```bash
 codecritique check --no-ai
 ```
+
+### Auto-Fix
+
+Clean up the code before (or after) a check — applies ruff's safe lint fixes
+and reformats the files in place:
+
+```bash
+codecritique fix                 # fix changed files
+codecritique fix path/to/file.py # fix specific files
+codecritique fix --unsafe        # also apply fixes that may change behavior
+```
+
+`--unsafe` enables rewrites like `x == True` → `x`; review the diff afterwards.
 
 ### Machine-Readable Output (AI Agents & CI)
 

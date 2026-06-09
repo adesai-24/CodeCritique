@@ -7,10 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from critique.checkers.base import Severity
-from critique.checkers.lint import RuffChecker
+from critique.checkers.lint import RuffChecker, project_has_ruff_config
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
+from critique.checkers.format import FormatChecker
 from critique.checkers.ai_critic import AICriticChecker
 
 
@@ -69,6 +70,83 @@ class TestRuffChecker:
     def test_invalid_json_returns_no_issues(self):
         with patch("subprocess.run", return_value=_run_result("not json")):
             issues = RuffChecker().run(["f.py"])
+        assert issues == []
+
+    def test_readability_rules_map_to_info(self):
+        ruff_output = json.dumps([
+            {
+                "filename": "sample.py",
+                "location": {"row": 3, "column": 1},
+                "message": "Use a list comprehension",
+                "code": "SIM110",
+            }
+        ])
+        with patch("subprocess.run", return_value=_run_result(ruff_output)):
+            issues = RuffChecker().run(["sample.py"])
+        assert issues[0].severity == Severity.INFO
+
+    def test_bugbear_rules_map_to_warning(self):
+        ruff_output = json.dumps([
+            {
+                "filename": "sample.py",
+                "location": {"row": 7, "column": 1},
+                "message": "Mutable default argument",
+                "code": "B006",
+            }
+        ])
+        with patch("subprocess.run", return_value=_run_result(ruff_output)):
+            issues = RuffChecker().run(["sample.py"])
+        assert issues[0].severity == Severity.WARNING
+
+    def test_curated_rules_used_without_project_config(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with patch("subprocess.run", return_value=_run_result("[]")) as run:
+            RuffChecker().run(["f.py"])
+        assert any("--select=" in arg for arg in run.call_args[0][0])
+
+    def test_project_config_is_respected(self, tmp_path, monkeypatch):
+        (tmp_path / "ruff.toml").write_text("line-length = 100\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        with patch("subprocess.run", return_value=_run_result("[]")) as run:
+            RuffChecker().run(["f.py"])
+        assert not any("--select=" in arg for arg in run.call_args[0][0])
+
+
+def test_project_has_ruff_config_detects_pyproject_section(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nline-length = 100\n", encoding="utf-8")
+    assert project_has_ruff_config(str(tmp_path)) is True
+
+
+def test_project_has_ruff_config_false_when_absent(tmp_path):
+    assert project_has_ruff_config(str(tmp_path)) is False
+
+
+# ---------------------------------------------------------------------------
+# FormatChecker
+# ---------------------------------------------------------------------------
+
+class TestFormatChecker:
+    def test_empty_files_returns_no_issues(self):
+        assert FormatChecker().run([]) == []
+
+    def test_non_python_files_are_skipped(self):
+        assert FormatChecker().run(["README.md"]) == []
+
+    def test_unformatted_file_reported_as_info(self):
+        output = "Would reformat: messy.py\n1 file would be reformatted\n"
+        with patch("subprocess.run", return_value=_run_result(output, returncode=1)):
+            issues = FormatChecker().run(["messy.py"])
+
+        assert len(issues) == 1
+        assert issues[0].file_path == "messy.py"
+        assert issues[0].code == "FMT001"
+        assert issues[0].severity == Severity.INFO
+        assert issues[0].suggested_fix
+
+    def test_formatted_files_return_no_issues(self):
+        output = "1 file already formatted\n"
+        with patch("subprocess.run", return_value=_run_result(output, returncode=0)):
+            issues = FormatChecker().run(["clean.py"])
         assert issues == []
 
 

@@ -8,12 +8,13 @@ from typing import Any, Dict, List, Optional
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from critique.git_utils import get_changed_files
+from critique.git_utils import get_changed_files, get_current_branch
 from critique.checkers.base import Issue, Severity
-from critique.checkers.lint import RuffChecker
+from critique.checkers.lint import CURATED_RULES, RuffChecker, project_has_ruff_config
 from critique.checkers.security import BanditChecker
 from critique.checkers.types import MypyChecker
 from critique.checkers.coverage import CoverageChecker
+from critique.checkers.format import FormatChecker
 from critique.report import print_report, print_ai_report
 from critique.persistence import fallback_synthesis, issue_to_dict, save_report
 
@@ -116,6 +117,7 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
         BanditChecker(),
         MypyChecker(),
         CoverageChecker(),
+        FormatChecker(),
     ]
 
     if use_ai:
@@ -179,6 +181,66 @@ def scan_files(files: List[str], use_ai: bool = True) -> List[Issue]:
     return all_issues
 
 
+def build_review_context(
+    files: List[str],
+    incremental: bool,
+    custom_files: Optional[List[str]],
+) -> Dict[str, Any]:
+    """Describe the current run so the AI review can speak to the situation."""
+    if custom_files:
+        mode = "a targeted review of specific files"
+    elif incremental:
+        mode = "a pre-push review of files changed on this branch"
+    else:
+        mode = "a full scan of the whole project"
+    return {
+        "project": os.path.basename(os.path.abspath(os.getcwd())),
+        "branch": get_current_branch(),
+        "mode": mode,
+        "file_count": len(files),
+    }
+
+
+def fix_files(
+    incremental: bool = True,
+    custom_files: Optional[List[str]] = None,
+    unsafe: bool = False,
+) -> bool:
+    """Auto-fix lint issues and reformat the target files in place.
+
+    Runs `ruff check --fix` (safe fixes only unless unsafe=True) followed by
+    `ruff format`. Returns False only if ruff itself could not be run.
+    """
+    import subprocess
+
+    files = get_target_files(incremental, custom_files)
+    if not files:
+        return True
+
+    try:
+        fix_cmd = ["ruff", "check", "--fix", "--exit-zero"]
+        if not project_has_ruff_config():
+            fix_cmd.append(f"--select={CURATED_RULES}")
+        if unsafe:
+            fix_cmd.append("--unsafe-fixes")
+        fix_result = subprocess.run(fix_cmd + files, capture_output=True, text=True)
+
+        fmt_result = subprocess.run(
+            ["ruff", "format"] + files, capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        console.print("[red]ruff is not installed or not on PATH.[/red]")
+        return False
+
+    summary = fix_result.stdout.strip().splitlines()
+    if summary:
+        console.print(f"[green]{summary[-1]}[/green]")
+    fmt_summary = (fmt_result.stdout.strip() or fmt_result.stderr.strip()).splitlines()
+    if fmt_summary:
+        console.print(f"[green]{fmt_summary[-1]}[/green]")
+    return True
+
+
 def run_all_checks(
     incremental: bool = True,
     custom_files: Optional[List[str]] = None,
@@ -212,7 +274,8 @@ def run_all_checks(
             if llm.is_available():
                 if all_issues:
                     all_issues = enrich_issues(all_issues, llm)
-                synth = AISynthesizer(llm).synthesize(all_issues)
+                context = build_review_context(files, incremental, custom_files)
+                synth = AISynthesizer(llm).synthesize(all_issues, context=context)
             else:
                 console.print("[yellow]Ollama not reachable — falling back to basic report.[/yellow]")
         except Exception as exc:

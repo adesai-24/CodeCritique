@@ -8,7 +8,7 @@ renders.
 """
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from critique.checkers.base import Issue, Severity
 from critique.ai.client import LLMClient
@@ -31,12 +31,33 @@ class AISynthesizer:
     def __init__(self, llm: LLMClient):
         self.llm = llm
 
-    def synthesize(self, issues: List[Issue]) -> Dict[str, Any]:
+    def synthesize(
+        self,
+        issues: List[Issue],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Return a synthesis dict. Never raises — falls back gracefully on error.
+
+        `context` (project, branch, mode, file_count) lets the review speak to
+        the specific situation instead of sounding generic.
         """
         if not issues:
             return _CLEAN_RESULT
+
+        context_line = ""
+        if context:
+            parts = []
+            if context.get("project"):
+                parts.append(f"project '{context['project']}'")
+            if context.get("branch"):
+                parts.append(f"branch '{context['branch']}'")
+            if context.get("file_count"):
+                parts.append(f"{context['file_count']} file(s)")
+            if context.get("mode"):
+                parts.append(context["mode"])
+            if parts:
+                context_line = "Context: this is " + ", ".join(parts) + ".\n\n"
 
         lines = []
         for i, issue in enumerate(issues):
@@ -52,7 +73,8 @@ class AISynthesizer:
             lines.append(entry)
 
         user_msg = (
-            f"Here are {len(issues)} findings from automated code analysis:\n\n"
+            context_line
+            + f"Here are {len(issues)} findings from automated code analysis:\n\n"
             + "\n\n".join(lines)
             + "\n\nProvide your synthesis."
         )

@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.table import Table
 
 from critique.ai.client import LLMClient
-from critique.runner import run_all_checks
+from critique.runner import fix_files, run_all_checks
 from critique.git_utils import install_pre_push_hook
 from critique.persistence import list_reports, load_report
 
@@ -40,6 +40,27 @@ def check(
         raise typer.Exit(code=1)
     if not json_output:
         typer.echo("All checks passed!")
+
+@app.command()
+def fix(
+    files: Optional[list[str]] = typer.Argument(None, help="Specific files to fix."),
+    incremental: bool = typer.Option(True, help="Only fix changed files (git diff)."),
+    unsafe: bool = typer.Option(
+        False, "--unsafe",
+        help="Also apply ruff's unsafe fixes (may change behavior; review the diff).",
+    ),
+):
+    """
+    Auto-fix lint issues and reformat code in place.
+
+    Runs `ruff check --fix` (safe fixes) followed by `ruff format` on the
+    target files. Re-run `codecritique check` afterwards to see what remains.
+    """
+    success = fix_files(incremental=incremental, custom_files=files, unsafe=unsafe)
+    if not success:
+        raise typer.Exit(code=1)
+    typer.echo("Done. Run `codecritique check` to review the remaining issues.")
+
 
 @app.command()
 def install_hooks():

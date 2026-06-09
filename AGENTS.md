@@ -15,7 +15,12 @@ codecritique check --json --no-ai            # fast, deterministic static checks
 codecritique check --json --no-ai path/to/file.py   # specific files
 codecritique check --json --no-ai --no-incremental  # full repo scan
 codecritique check --json                    # adds local-LLM review (slow; requires `ollama serve`)
+codecritique fix [files...]                  # apply safe lint fixes + reformat in place
+codecritique fix --unsafe                    # also apply behavior-changing fixes
 ```
+
+A good agent loop: `fix` first (mechanical cleanup), then `check --json --no-ai`
+and resolve the remaining findings yourself.
 
 Exit codes: `0` = passed (no FATAL issues), `1` = failed (FATAL issues found).
 
@@ -32,7 +37,7 @@ JSON shape:
       "line": 42,
       "column": 5,
       "message": "...",
-      "code": "E999",            // ruff code, bandit test id, "TYPE", "AI", "COV-LOW"
+      "code": "E999",            // ruff code, bandit test id, "TYPE", "AI", "COV-LOW", "FMT001"
       "severity": "FATAL",       // FATAL | WARNING | INFO
       "reasoning": "...",        // plain-English explanation (AI-enriched when Ollama is up)
       "code_context": ["..."],   // ±3 source lines around the finding
@@ -58,6 +63,10 @@ Recommendations:
 - Severity is the contract: only `FATAL` blocks (exit 1). `WARNING`/`INFO` pass.
 - Incremental mode diffs against `origin/main`; with no changed `.py` files it
   passes immediately.
+- Lint depth is environment-aware: when the target project has no ruff config
+  (`ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in `pyproject.toml`), checks use
+  the curated rule set `E,W,F,B,C4,SIM,UP,C90,RUF`; otherwise the project's own
+  config wins. `FMT001` (INFO) means `codecritique fix` would reformat the file.
 
 Other commands: `codecritique list` (saved reports), `codecritique chat --last`
 (interactive Q&A about a report; needs Ollama), `codecritique install-hooks`
@@ -76,8 +85,8 @@ Other commands: `codecritique list` (saved reports), `codecritique chat --last`
 
 Layout:
 
-- `src/critique/cli.py` — Typer CLI (`check`, `list`, `chat`, `install-hooks`)
-- `src/critique/runner.py` — orchestration: file selection, checker fan-out, report dispatch
+- `src/critique/cli.py` — Typer CLI (`check`, `fix`, `list`, `chat`, `install-hooks`)
+- `src/critique/runner.py` — orchestration: file selection, checker fan-out, fix pipeline, report dispatch
 - `src/critique/checkers/` — one checker per file; all implement `BaseChecker.run(files) -> List[Issue]`
 - `src/critique/ai/` — Ollama client (with caching), critic prompts/schemas, enricher, synthesizer
 - `src/critique/report.py` — terminal renderers (basic table + AI review)

@@ -6,6 +6,18 @@ from pathlib import Path
 from rich import print
 from typing import List
 
+def get_current_branch() -> str:
+    """Return the current git branch name, or '' outside a repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
 def get_changed_files(target_branch: str = "origin/main") -> List[str]:
     try:
         cmd = ["git", "diff", "--name-only", "--diff-filter=ACM", f"{target_branch}...HEAD"]
