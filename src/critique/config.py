@@ -53,6 +53,44 @@ DEFAULT_MODELS: Dict[str, str] = {
 # print a helpful list without importing every optional SDK.
 SUPPORTED_PROVIDERS = tuple(DEFAULT_MODELS.keys())
 
+# Curated model list per provider — not exhaustive, just the common picks.
+# Any model string accepted by the provider can be set with ``config set model``.
+KNOWN_MODELS: Dict[str, list] = {
+    "gemini": [
+        ("gemini-2.0-flash",        "fast, free tier (default)"),
+        ("gemini-2.5-flash",        "faster Gemini 2.5"),
+        ("gemini-2.5-pro",          "most capable Gemini 2.5"),
+        ("gemini-1.5-flash",        "older, widely available"),
+        ("gemini-1.5-pro",          "older flagship"),
+    ],
+    "openai": [
+        ("gpt-4o-mini",             "cheap and fast (default)"),
+        ("gpt-4o",                  "flagship GPT-4o"),
+        ("gpt-4.1-mini",            "GPT-4.1 small"),
+        ("gpt-4.1",                 "GPT-4.1 flagship"),
+        ("o4-mini",                 "reasoning model"),
+    ],
+    "anthropic": [
+        ("claude-3-5-haiku-latest", "fast and cheap (default)"),
+        ("claude-3-5-sonnet-latest","balanced"),
+        ("claude-sonnet-4-6",       "Claude 4 Sonnet"),
+        ("claude-opus-4-8",         "most capable"),
+    ],
+    "ollama": [
+        ("qwen2.5-coder:7b",        "default, good code model"),
+        ("qwen2.5-coder:14b",       "larger, more capable"),
+        ("codellama:7b",            "Meta's code model"),
+        ("llama3.1:8b",             "general-purpose"),
+        ("deepseek-coder-v2:16b",   "strong code model"),
+    ],
+    "vllm": [
+        ("Qwen/Qwen2.5-Coder-7B-Instruct",  "default"),
+        ("Qwen/Qwen2.5-Coder-32B-Instruct", "larger Qwen coder"),
+        ("deepseek-ai/DeepSeek-Coder-V2-Instruct", "strong code model"),
+        ("meta-llama/Llama-3.1-8B-Instruct","general-purpose"),
+    ],
+}
+
 
 # ---------------------------------------------------------------------------
 # Config model

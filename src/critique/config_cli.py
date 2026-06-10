@@ -5,9 +5,12 @@ Examples
 --------
     codecritique config show
     codecritique config providers
+    codecritique config models                     # list known models for active provider
+    codecritique config models gemini              # list known models for gemini
+    codecritique config model gemini-2.5-pro       # switch model
+    codecritique config model none                 # reset to provider default
     codecritique config set provider gemini
     codecritique config language auto
-    codecritique config set model gemini-2.0-flash
     codecritique config set-key gemini            # prompts, input hidden
     codecritique config set-key openai sk-...      # non-interactive
     codecritique config delete-key anthropic
@@ -24,7 +27,7 @@ from rich.table import Table
 from critique import config as cfg_mod
 from critique import secrets_store
 from critique import profiles
-from critique.config import SUPPORTED_PROVIDERS
+from critique.config import KNOWN_MODELS, SUPPORTED_PROVIDERS
 from critique.languages import LANGUAGE_CHOICES
 
 console = Console()
@@ -94,6 +97,54 @@ def providers() -> None:
             "yes" if provider in needs_key else "no / optional",
         )
     console.print(table)
+
+
+@config_app.command("models")
+def models(
+    provider: Optional[str] = typer.Argument(
+        None, help="Show models for this provider only. Defaults to the active provider."
+    ),
+) -> None:
+    """List known models for a provider (or the active one)."""
+    cfg = cfg_mod.load_config()
+    target = (provider or cfg.provider).strip().lower()
+    if target not in SUPPORTED_PROVIDERS:
+        console.print(
+            f"[red]Unknown provider '{target}'.[/red] "
+            f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+        )
+        raise typer.Exit(code=1)
+
+    active_model = cfg.resolved_model()
+    table = Table(title=f"Known models — {target}", header_style="bold cyan")
+    table.add_column("Model")
+    table.add_column("Notes")
+    for model_id, note in KNOWN_MODELS.get(target, []):
+        marker = " [green]●[/green]" if model_id == active_model else ""
+        table.add_row(model_id + marker, note)
+    console.print(table)
+    console.print(
+        f"[dim]Active: {active_model}{'  (default)' if not cfg.model else ''}\n"
+        "Set any model with: critique config model <name>[/dim]"
+    )
+
+
+@config_app.command("model")
+def model(
+    name: str = typer.Argument(..., help="Model name/ID to use, e.g. gemini-2.5-pro."),
+) -> None:
+    """Set the model for the active provider."""
+    name = name.strip()
+    if not name or name.lower() in {"none", "null"}:
+        cfg_mod.set_value("model", None)
+        cfg = cfg_mod.load_config()
+        console.print(
+            f"[green]Model cleared — using provider default "
+            f"({cfg.resolved_model()}).[/green]"
+        )
+        return
+    cfg_mod.set_value("model", name)
+    console.print(f"[green]Model set to '{name}'.[/green]")
 
 
 @config_app.command("set")
@@ -270,6 +321,22 @@ def wizard() -> None:
             if key.strip():
                 secrets_store.set_api_key(provider, key)
                 console.print(f"[green]Saved {provider} key ({secrets_store.mask_key(key)}).[/green]")
+
+    known = KNOWN_MODELS.get(provider, [])
+    if known:
+        console.print(f"\nKnown models for {provider}:")
+        for i, (mid, note) in enumerate(known):
+            console.print(f"  {i + 1}. {mid}  [dim]{note}[/dim]")
+    current_model = cfg_mod.load_config().resolved_model()
+    chosen_model = typer.prompt(
+        "Model (leave blank for default)", default="", show_default=False
+    ).strip()
+    if chosen_model:
+        cfg_mod.set_value("model", chosen_model)
+        console.print(f"[green]Model set to '{chosen_model}'.[/green]")
+    else:
+        cfg_mod.set_value("model", None)
+        console.print(f"[dim]Using default model: {current_model}[/dim]")
 
     mode_names = [p.name for p in profiles.list_profiles()]
     chosen = typer.prompt(
