@@ -88,9 +88,11 @@ def learn(
     """Analyse your existing code and build/update your style profile."""
     target = paths or ["."]
     console.print(f"[cyan]Analysing your code in: {', '.join(target)}[/cyan]")
-    profile = style_mod.analyze_paths(target)
+    cfg = cfg_mod.load_config()
+    profile = style_mod.analyze_paths(target, language=cfg.language)
     if profile.files_analyzed == 0:
-        console.print("[red]No Python files found to learn from.[/red]")
+        lang = cfg.language if cfg.language != "auto" else "supported"
+        console.print(f"[red]No {lang} files found to learn from.[/red]")
         raise typer.Exit(code=1)
     path = style_mod.save_profile(profile)
     console.print(

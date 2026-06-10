@@ -5,9 +5,14 @@ Examples
 --------
     codecritique config show
     codecritique config providers
+    codecritique config models                     # curated list for active provider
+    codecritique config models gemini              # curated list for gemini
+    codecritique config models --fetch             # live list queried from provider API
+    codecritique config models ollama --fetch      # show what's actually installed locally
+    codecritique config model gemini-2.5-pro       # switch model
+    codecritique config model none                 # reset to provider default
     codecritique config set provider gemini
     codecritique config language auto
-    codecritique config set model gemini-2.0-flash
     codecritique config set-key gemini            # prompts, input hidden
     codecritique config set-key openai sk-...      # non-interactive
     codecritique config delete-key anthropic
@@ -15,7 +20,7 @@ Examples
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -24,7 +29,7 @@ from rich.table import Table
 from critique import config as cfg_mod
 from critique import secrets_store
 from critique import profiles
-from critique.config import SUPPORTED_PROVIDERS
+from critique.config import KNOWN_MODELS, SUPPORTED_PROVIDERS
 from critique.languages import LANGUAGE_CHOICES
 
 console = Console()
@@ -79,6 +84,63 @@ def show() -> None:
     )
 
 
+def _fetch_models_live(provider: str, cfg) -> Optional[List[str]]:
+    """Query the provider's API and return a sorted list of model IDs.
+
+    Returns None when the provider is unreachable or the key is missing.
+    """
+    try:
+        if provider == "ollama":
+            import json as _json
+            import urllib.request
+            base = (cfg.base_url or "http://localhost:11434").rstrip("/")
+            with urllib.request.urlopen(f"{base}/api/tags", timeout=5) as resp:
+                data = _json.loads(resp.read())
+            return sorted(m["name"] for m in data.get("models", []))
+
+        if provider == "gemini":
+            from google import genai  # type: ignore
+            from critique.secrets_store import get_api_key as _gak
+            key = _gak("gemini")
+            if not key:
+                return None
+            client = genai.Client(api_key=key)
+            names = []
+            for m in client.models.list():
+                name = m.name
+                if name.startswith("models/"):
+                    name = name[len("models/"):]
+                if "gemini" in name.lower():
+                    names.append(name)
+            return sorted(set(names))
+
+        if provider == "anthropic":
+            import anthropic  # type: ignore
+            from critique.secrets_store import get_api_key as _gak
+            key = _gak("anthropic")
+            if not key:
+                return None
+            client = anthropic.Anthropic(api_key=key)
+            return [m.id for m in client.models.list().data]
+
+        if provider in {"openai", "vllm"}:
+            from openai import OpenAI  # type: ignore
+            from critique.secrets_store import get_api_key as _gak
+            key = _gak(provider) or ("EMPTY" if provider == "vllm" else None)
+            if not key:
+                return None
+            base_url = cfg.base_url or ("http://localhost:8000/v1" if provider == "vllm" else None)
+            kwargs: dict = {"api_key": key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            client = OpenAI(**kwargs)
+            return sorted(m.id for m in client.models.list().data)
+
+    except BaseException:
+        pass
+    return None
+
+
 @config_app.command("providers")
 def providers() -> None:
     """List the supported AI providers and their default models."""
@@ -94,6 +156,83 @@ def providers() -> None:
             "yes" if provider in needs_key else "no / optional",
         )
     console.print(table)
+
+
+@config_app.command("models")
+def models(
+    provider: Optional[str] = typer.Argument(
+        None, help="Provider to list models for. Defaults to the active provider."
+    ),
+    fetch: bool = typer.Option(
+        False, "--fetch", "-F",
+        help="Query the provider API for a live model list instead of the built-in one.",
+    ),
+) -> None:
+    """List models for a provider — built-in curated list, or live from the API."""
+    cfg = cfg_mod.load_config()
+    target = (provider or cfg.provider).strip().lower()
+    if target not in SUPPORTED_PROVIDERS:
+        console.print(
+            f"[red]Unknown provider '{target}'.[/red] "
+            f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+        )
+        raise typer.Exit(code=1)
+
+    active_model = cfg.resolved_model()
+
+    if fetch:
+        console.print(f"[dim]Querying {target} for available models…[/dim]")
+        live = _fetch_models_live(target, cfg)
+        if live is None:
+            console.print(
+                f"[yellow]Could not fetch models from {target}.[/yellow] "
+                "Check your API key and connection, then try again."
+            )
+            console.print("[dim]Falling back to built-in list…[/dim]")
+        else:
+            table = Table(title=f"Available models — {target} (live)", header_style="bold cyan")
+            table.add_column("Model")
+            for mid in live:
+                marker = " [green]●[/green]" if mid == active_model else ""
+                table.add_row(mid + marker)
+            console.print(table)
+            console.print(
+                f"[dim]Active: {active_model}{'  (default)' if not cfg.model else ''}\n"
+                "Set one with: critique config model <name>[/dim]"
+            )
+            return
+
+    # Built-in curated list
+    table = Table(title=f"Known models — {target}", header_style="bold cyan")
+    table.add_column("Model")
+    table.add_column("Notes")
+    for model_id, note in KNOWN_MODELS.get(target, []):
+        marker = " [green]●[/green]" if model_id == active_model else ""
+        table.add_row(model_id + marker, note)
+    console.print(table)
+    console.print(
+        f"[dim]Active: {active_model}{'  (default)' if not cfg.model else ''}\n"
+        "Tip: use --fetch / -F to query the provider API for the full live list.\n"
+        "Set any model with: critique config model <name>[/dim]"
+    )
+
+
+@config_app.command("model")
+def model(
+    name: str = typer.Argument(..., help="Model name/ID to use, e.g. gemini-2.5-pro."),
+) -> None:
+    """Set the model for the active provider."""
+    name = name.strip()
+    if not name or name.lower() in {"none", "null"}:
+        cfg_mod.set_value("model", None)
+        cfg = cfg_mod.load_config()
+        console.print(
+            f"[green]Model cleared — using provider default "
+            f"({cfg.resolved_model()}).[/green]"
+        )
+        return
+    cfg_mod.set_value("model", name)
+    console.print(f"[green]Model set to '{name}'.[/green]")
 
 
 @config_app.command("set")
@@ -270,6 +409,22 @@ def wizard() -> None:
             if key.strip():
                 secrets_store.set_api_key(provider, key)
                 console.print(f"[green]Saved {provider} key ({secrets_store.mask_key(key)}).[/green]")
+
+    known = KNOWN_MODELS.get(provider, [])
+    if known:
+        console.print(f"\nKnown models for {provider}:")
+        for i, (mid, note) in enumerate(known):
+            console.print(f"  {i + 1}. {mid}  [dim]{note}[/dim]")
+    current_model = cfg_mod.load_config().resolved_model()
+    chosen_model = typer.prompt(
+        "Model (leave blank for default)", default="", show_default=False
+    ).strip()
+    if chosen_model:
+        cfg_mod.set_value("model", chosen_model)
+        console.print(f"[green]Model set to '{chosen_model}'.[/green]")
+    else:
+        cfg_mod.set_value("model", None)
+        console.print(f"[dim]Using default model: {current_model}[/dim]")
 
     mode_names = [p.name for p in profiles.list_profiles()]
     chosen = typer.prompt(

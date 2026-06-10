@@ -23,10 +23,11 @@ import ast
 import io
 import json
 import os
+import re
 import tokenize
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from critique.config import CONFIG_DIR
 
@@ -60,18 +61,57 @@ class StyleProfile:
 # Analysis
 # ---------------------------------------------------------------------------
 
-def _iter_python_files(paths: List[str]) -> List[Path]:
+_CPP_KEYWORDS = frozenset({
+    'if', 'for', 'while', 'switch', 'catch', 'do', 'try', 'else',
+    'namespace', 'class', 'struct', 'enum', 'return', 'new', 'delete',
+})
+_CPP_FUNC_RE = re.compile(r'\b([a-zA-Z_]\w*)\s*\([^;]*\)\s*\{')
+
+
+def _iter_source_files(paths: List[str], extensions: Tuple[str, ...]) -> List[Path]:
     files: List[Path] = []
     for raw in paths:
         p = Path(raw)
-        if p.is_file() and p.suffix == ".py":
+        if p.is_file() and p.suffix.lower() in extensions:
             files.append(p)
         elif p.is_dir():
-            for sub in p.rglob("*.py"):
+            for sub in p.rglob("*"):
+                if sub.suffix.lower() not in extensions:
+                    continue
                 if any(part in _SKIP_DIRS for part in sub.parts):
                     continue
                 files.append(sub)
     return files
+
+
+def _analyze_cpp_source(source: str, c: _Counters) -> None:
+    in_block = False
+    for line in source.splitlines():
+        stripped = line.strip()
+        if in_block:
+            c.comment_lines += 1
+            if '*/' in stripped:
+                in_block = False
+            continue
+        if stripped.startswith('//'):
+            c.comment_lines += 1
+        elif '/*' in stripped:
+            c.comment_lines += 1
+            if '*/' not in stripped:
+                in_block = True
+
+    for m in _CPP_FUNC_RE.finditer(source):
+        name = m.group(1)
+        if name in _CPP_KEYWORDS:
+            continue
+        c.func_names_total += 1
+        c.defs += 1
+        if _is_snake_case(name):
+            c.func_names_snake += 1
+            if len(c.snake_names) < 8:
+                c.snake_names.append(name)
+        elif len(c.other_names) < 8:
+            c.other_names.append(name)
 
 
 def _is_snake_case(name: str) -> bool:
@@ -162,13 +202,16 @@ def _analyze_ast(source: str, c: _Counters) -> None:
                 c.defs_with_doc += 1
 
 
-def analyze_paths(paths: Optional[List[str]] = None) -> StyleProfile:
-    """Build a StyleProfile from the Python files under ``paths``.
+def analyze_paths(paths: Optional[List[str]] = None, language: str = "auto") -> StyleProfile:
+    """Build a StyleProfile from source files under ``paths``.
 
     Defaults to the current working directory.  Never raises on a bad file.
     """
+    from critique.languages import extensions_for_choice, PYTHON
     paths = paths or [os.getcwd()]
-    files = _iter_python_files(paths)
+    extensions = extensions_for_choice(language)
+    files = _iter_source_files(paths, extensions)
+    python_exts = PYTHON.extensions
     c = _Counters()
     analyzed = 0
 
@@ -182,8 +225,11 @@ def analyze_paths(paths: Optional[List[str]] = None) -> StyleProfile:
             if line.strip():
                 c.code_lines += 1
                 c.line_lengths.append(len(line))
-        _analyze_tokens(source, c)
-        _analyze_ast(source, c)
+        if path.suffix.lower() in python_exts:
+            _analyze_tokens(source, c)
+            _analyze_ast(source, c)
+        else:
+            _analyze_cpp_source(source, c)
 
     return _aggregate(c, analyzed)
 
@@ -362,16 +408,17 @@ def learn_incrementally(
     paths: Optional[List[str]] = None,
     alpha: float = DEFAULT_LEARN_RATE,
     path: Optional[Path] = None,
+    language: str = "auto",
 ) -> Optional[StyleProfile]:
     """Analyse ``paths`` and fold the result into the saved profile via EMA.
 
     This is the engine behind "learn as you review": call it after a ``check``
     run with the files that were just reviewed. The first ever call (no saved
     profile yet) simply seeds the profile from the batch. Returns the updated
-    profile, or ``None`` when the batch had no Python functions to learn from.
+    profile, or ``None`` when the batch had no functions to learn from.
     Never raises on a bad path.
     """
-    batch = analyze_paths(paths)
+    batch = analyze_paths(paths, language=language)
     if batch.files_analyzed == 0 or batch.functions == 0:
         return None
     existing = load_profile(path)
