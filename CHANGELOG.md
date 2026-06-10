@@ -2,6 +2,19 @@
 
 All notable changes to CodeCritique will be documented in this file.
 
+## 0.2.1 - 2026-06-10
+
+- `codecritique do` can now change settings: a `set_config` action lets plain
+  English like "switch to strict mode and only review python files" update
+  `provider`, `model`, `language`, `suggestion_mode`, `temperature`,
+  `style_learning`, and friends — validated against the known settings and
+  their allowed values, and still behind the plan-confirmation prompt.
+- API keys are explicitly refused by the assistant; `codecritique config
+  set-key <provider>` (hidden input) remains the only way to set them.
+- Remove shell tab-completion (the `--install-completion` /
+  `--show-completion` options and their documentation); the natural-language
+  assistant is the supported discovery path.
+
 ## 0.2.0 - 2026-06-09
 
 - Add a natural-language assistant backed by the configured AI provider:
@@ -10,8 +23,6 @@ All notable changes to CodeCritique will be documented in this file.
   - `codecritique do "<instruction>"` translates plain English into a plan of
     whitelisted actions (check, fix, format, list_reports, install_hooks),
     shows the plan, and runs it only after confirmation (`--yes` to skip).
-- Document shell tab-completion (`codecritique --install-completion`) for
-  bash, zsh, fish, and PowerShell.
 - Run ruff, mypy, bandit, and coverage via `python -m` so checks cannot
   silently lose findings when a virtualenv's console-script launchers break
   (e.g. after the venv directory is moved).

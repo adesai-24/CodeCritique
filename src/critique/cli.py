@@ -14,7 +14,10 @@ from critique.config_cli import config_app
 from critique.cache_cli import cache_app
 from critique.style_cli import style_app
 
-app = typer.Typer(help="CodeCritique: A pre-push quality gate for your code.")
+app = typer.Typer(
+    help="CodeCritique: A pre-push quality gate for your code.",
+    add_completion=False,
+)
 app.add_typer(config_app, name="config")
 app.add_typer(cache_app, name="cache")
 app.add_typer(style_app, name="style")
