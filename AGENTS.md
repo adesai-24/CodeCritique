@@ -73,7 +73,7 @@ Recommendations:
 Other commands: `codecritique ask "<question>"` (plain-English capability
 Q&A), `codecritique do "<instruction>" [--yes]` (plain-English request ->
 whitelisted action plan -> confirm -> run; actions: check, fix, format,
-list_reports, install_hooks), `codecritique format` (AI-driven,
+list_reports, install_hooks, set_config — settings only, never API keys), `codecritique format` (AI-driven,
 behavior-preserving reformatter with diff preview), `codecritique list`
 (saved reports),
 `codecritique chat --last` (interactive Q&A about a report; needs an AI

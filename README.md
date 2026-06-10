@@ -239,16 +239,20 @@ codecritique ask "what's the difference between fix and format?"
 
 `do` goes one step further: describe what you want, and it builds a plan from
 a fixed whitelist of actions (`check`, `fix`, `format`, `list_reports`,
-`install_hooks`), shows you the plan, and only runs it after you confirm
-(`--yes` skips the prompt — handy for scripts):
+`install_hooks`, `set_config`), shows you the plan, and only runs it after you
+confirm (`--yes` skips the prompt — handy for scripts):
 
 ```bash
 codecritique do clean up my changed files, then run a full static check
+codecritique do switch to strict mode and only review python files
 ```
 
 The model can only pick from that whitelist — it never produces shell commands
 — and unknown actions or arguments in its plan are rejected before anything
-executes. Both commands use your configured AI provider (§6).
+executes. `set_config` is limited to known settings with validated values, and
+API keys are refused outright: `codecritique config set-key <provider>` (with
+hidden input) is the only way to set those. Both commands use your configured
+AI provider (§6).
 
 ### Shell tab-completion
 

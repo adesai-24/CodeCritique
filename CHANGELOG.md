@@ -2,6 +2,16 @@
 
 All notable changes to CodeCritique will be documented in this file.
 
+## 0.2.1 - 2026-06-10
+
+- `codecritique do` can now change settings: a `set_config` action lets plain
+  English like "switch to strict mode and only review python files" update
+  `provider`, `model`, `language`, `suggestion_mode`, `temperature`,
+  `style_learning`, and friends — validated against the known settings and
+  their allowed values, and still behind the plan-confirmation prompt.
+- API keys are explicitly refused by the assistant; `codecritique config
+  set-key <provider>` (hidden input) remains the only way to set them.
+
 ## 0.2.0 - 2026-06-09
 
 - Add a natural-language assistant backed by the configured AI provider:

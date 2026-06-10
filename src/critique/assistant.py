@@ -122,6 +122,65 @@ def _do_install_hooks() -> bool:
     return True
 
 
+# Settings `do` may change, with their allowed values (None = free-form, the
+# config layer's own coercion/validation applies). API keys are deliberately
+# absent: secrets must never travel through an LLM prompt or plan — point the
+# user at `codecritique config set-key <provider>` instead.
+def _configurable_settings() -> Dict[str, Optional[List[str]]]:
+    from critique.config import SUPPORTED_PROVIDERS
+    from critique.languages import LANGUAGE_CHOICES
+    from critique.profiles import BUILTIN_PROFILES
+    return {
+        "provider": list(SUPPORTED_PROVIDERS),
+        "model": None,
+        "base_url": None,
+        "temperature": None,
+        "timeout": None,
+        "language": list(LANGUAGE_CHOICES),
+        "suggestion_mode": list(BUILTIN_PROFILES),
+        "project_context": None,
+        "custom_instructions": None,
+        "style_learning": ["on", "off"],
+        "adaptive_style": ["on", "off"],
+    }
+
+
+def _do_set_config(setting: str = "", value: str = "") -> bool:
+    allowed = _configurable_settings()
+    setting = str(setting).strip().lower()
+
+    if "key" in setting:
+        console.print(
+            "[yellow]API keys can't be set through the assistant — run "
+            "`codecritique config set-key <provider>` yourself (input is hidden).[/yellow]"
+        )
+        return False
+    if setting not in allowed:
+        console.print(
+            f"[red]Unknown setting {setting!r}. "
+            f"Configurable: {', '.join(sorted(allowed))}.[/red]"
+        )
+        return False
+
+    choices = allowed[setting]
+    normalized = str(value).strip()
+    if choices is not None and normalized.lower() not in choices:
+        console.print(
+            f"[red]Invalid value {value!r} for {setting}. "
+            f"Choose one of: {', '.join(choices)}.[/red]"
+        )
+        return False
+
+    from critique.config import set_value
+    try:
+        set_value(setting, normalized)
+    except (ValueError, TypeError) as exc:
+        console.print(f"[red]Could not set {setting}: {exc}[/red]")
+        return False
+    console.print(f"[green]Set {setting} = {normalized}[/green]")
+    return True
+
+
 # action name -> (handler, description, {arg: description})
 ACTIONS: Dict[str, Tuple[Callable[..., bool], str, Dict[str, str]]] = {
     "check": (
@@ -161,13 +220,29 @@ ACTIONS: Dict[str, Tuple[Callable[..., bool], str, Dict[str, str]]] = {
         "Install the git pre-push hook in the current repository.",
         {},
     ),
+    "set_config": (
+        _do_set_config,
+        "Change a persistent CodeCritique setting (never API keys).",
+        {
+            "setting": "string; the setting name (see 'settings' below)",
+            "value": "string; the new value",
+        },
+    ),
 }
+
+# Action args treated as strings during plan validation (everything else is
+# a boolean, except the special-cased "files" list).
+_STRING_ARGS = {"setting", "value"}
 
 
 def _actions_for_prompt() -> str:
-    spec = {
+    spec: Dict[str, Any] = {
         name: {"description": desc, "args": args}
         for name, (_, desc, args) in ACTIONS.items()
+    }
+    spec["set_config"]["settings"] = {
+        name: (choices if choices is not None else "free-form")
+        for name, choices in _configurable_settings().items()
     }
     return json.dumps(spec, indent=2)
 
@@ -262,6 +337,14 @@ def validate_plan(raw: Any) -> Tuple[List[Dict[str, Any]], List[str]]:
                             and all(isinstance(f, str) for f in value)):
                         errors.append(
                             f"Step {i + 1} ({action}): dropped invalid 'files' value."
+                        )
+                        continue
+                elif key in _STRING_ARGS:
+                    if isinstance(value, (str, int, float, bool)):
+                        value = str(value)
+                    else:
+                        errors.append(
+                            f"Step {i + 1} ({action}): dropped non-scalar {key!r}."
                         )
                         continue
                 elif not isinstance(value, bool):

@@ -164,3 +164,57 @@ def test_plan_actions_normalizes_non_dict_response():
     llm.complete_json.return_value = ["unexpected"]
 
     assert assistant.plan_actions("x", llm) == {"reply": "", "plan": []}
+
+
+# ---------------------------------------------------------------------------
+# set_config action
+# ---------------------------------------------------------------------------
+
+def test_validate_plan_accepts_set_config_string_args():
+    raw = {
+        "plan": [
+            {"action": "set_config", "args": {"setting": "language", "value": "cpp"}},
+            {"action": "set_config", "args": {"setting": "temperature", "value": 0.3}},
+        ]
+    }
+    steps, errors = assistant.validate_plan(raw)
+
+    assert errors == []
+    assert steps[0]["args"] == {"setting": "language", "value": "cpp"}
+    assert steps[1]["args"] == {"setting": "temperature", "value": "0.3"}
+
+
+def test_set_config_refuses_api_keys():
+    assert assistant._do_set_config("api_key", "secret") is False
+    assert assistant._do_set_config("gemini-key", "secret") is False
+
+
+def test_set_config_rejects_unknown_setting():
+    assert assistant._do_set_config("favorite_color", "blue") is False
+
+
+def test_set_config_rejects_invalid_choice():
+    assert assistant._do_set_config("language", "java") is False
+    assert assistant._do_set_config("suggestion_mode", "yolo") is False
+
+
+def test_set_config_persists_valid_setting(tmp_path, monkeypatch):
+    from critique import config
+
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+
+    assert assistant._do_set_config("language", "cpp") is True
+    assert config.load_config().language == "cpp"
+
+    assert assistant._do_set_config("suggestion_mode", "strict") is True
+    assert config.load_config().suggestion_mode == "strict"
+
+    assert assistant._do_set_config("adaptive_style", "on") is True
+    assert config.load_config().adaptive_style is True
+
+
+def test_prompt_spec_lists_configurable_settings():
+    spec = assistant._actions_for_prompt()
+    assert "set_config" in spec
+    for setting in ("language", "suggestion_mode", "provider"):
+        assert setting in spec
