@@ -325,7 +325,7 @@ def run_all_checks(
     if do_learn:
         try:
             from critique.style import learn_incrementally
-            updated = learn_incrementally(files)
+            updated = learn_incrementally(files, language=cfg.language)
             if updated is not None:
                 console.print(
                     "[dim]Adaptive style: nudged your profile from "
