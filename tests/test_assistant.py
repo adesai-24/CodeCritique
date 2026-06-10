@@ -13,7 +13,7 @@ def test_build_manifest_lists_real_commands():
     manifest = assistant.build_manifest()
     for command in ("check", "fix", "format", "ask", "do", "install-hooks"):
         assert command in manifest
-    assert "--install-completion" in manifest
+    assert "completion" not in manifest.lower()
 
 
 def test_answer_question_grounds_llm_in_manifest():

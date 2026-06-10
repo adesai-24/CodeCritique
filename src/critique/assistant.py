@@ -61,10 +61,6 @@ def build_manifest() -> str:
         else:
             describe(cmd, "")
 
-    lines.append(
-        "- Shell tab-completion: `codecritique --install-completion` enables "
-        "completion of commands and options in bash/zsh/fish/PowerShell."
-    )
     return "\n".join(lines)
 
 

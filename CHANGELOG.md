@@ -11,6 +11,9 @@ All notable changes to CodeCritique will be documented in this file.
   their allowed values, and still behind the plan-confirmation prompt.
 - API keys are explicitly refused by the assistant; `codecritique config
   set-key <provider>` (hidden input) remains the only way to set them.
+- Remove shell tab-completion (the `--install-completion` /
+  `--show-completion` options and their documentation); the natural-language
+  assistant is the supported discovery path.
 
 ## 0.2.0 - 2026-06-09
 
@@ -20,8 +23,6 @@ All notable changes to CodeCritique will be documented in this file.
   - `codecritique do "<instruction>"` translates plain English into a plan of
     whitelisted actions (check, fix, format, list_reports, install_hooks),
     shows the plan, and runs it only after confirmation (`--yes` to skip).
-- Document shell tab-completion (`codecritique --install-completion`) for
-  bash, zsh, fish, and PowerShell.
 - Run ruff, mypy, bandit, and coverage via `python -m` so checks cannot
   silently lose findings when a virtualenv's console-script launchers break
   (e.g. after the venv directory is moved).

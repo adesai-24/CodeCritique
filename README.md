@@ -254,17 +254,6 @@ API keys are refused outright: `codecritique config set-key <provider>` (with
 hidden input) is the only way to set those. Both commands use your configured
 AI provider (§6).
 
-### Shell tab-completion
-
-The CLI can complete commands and options as you type:
-
-```bash
-codecritique --install-completion    # one-time setup for your shell
-```
-
-Supported for bash, zsh, fish, and PowerShell; zsh also shows each command's
-description next to the suggestion. Restart your shell after installing.
-
 ---
 
 ## 6. AI providers & API keys
