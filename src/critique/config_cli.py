@@ -5,8 +5,10 @@ Examples
 --------
     codecritique config show
     codecritique config providers
-    codecritique config models                     # list known models for active provider
-    codecritique config models gemini              # list known models for gemini
+    codecritique config models                     # curated list for active provider
+    codecritique config models gemini              # curated list for gemini
+    codecritique config models --fetch             # live list queried from provider API
+    codecritique config models ollama --fetch      # show what's actually installed locally
     codecritique config model gemini-2.5-pro       # switch model
     codecritique config model none                 # reset to provider default
     codecritique config set provider gemini
@@ -18,7 +20,7 @@ Examples
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -82,6 +84,63 @@ def show() -> None:
     )
 
 
+def _fetch_models_live(provider: str, cfg) -> Optional[List[str]]:
+    """Query the provider's API and return a sorted list of model IDs.
+
+    Returns None when the provider is unreachable or the key is missing.
+    """
+    try:
+        if provider == "ollama":
+            import json as _json
+            import urllib.request
+            base = (cfg.base_url or "http://localhost:11434").rstrip("/")
+            with urllib.request.urlopen(f"{base}/api/tags", timeout=5) as resp:
+                data = _json.loads(resp.read())
+            return sorted(m["name"] for m in data.get("models", []))
+
+        if provider == "gemini":
+            from google import genai  # type: ignore
+            from critique.secrets_store import get_api_key as _gak
+            key = _gak("gemini")
+            if not key:
+                return None
+            client = genai.Client(api_key=key)
+            names = []
+            for m in client.models.list():
+                name = m.name
+                if name.startswith("models/"):
+                    name = name[len("models/"):]
+                if "gemini" in name.lower():
+                    names.append(name)
+            return sorted(set(names))
+
+        if provider == "anthropic":
+            import anthropic  # type: ignore
+            from critique.secrets_store import get_api_key as _gak
+            key = _gak("anthropic")
+            if not key:
+                return None
+            client = anthropic.Anthropic(api_key=key)
+            return [m.id for m in client.models.list().data]
+
+        if provider in {"openai", "vllm"}:
+            from openai import OpenAI  # type: ignore
+            from critique.secrets_store import get_api_key as _gak
+            key = _gak(provider) or ("EMPTY" if provider == "vllm" else None)
+            if not key:
+                return None
+            base_url = cfg.base_url or ("http://localhost:8000/v1" if provider == "vllm" else None)
+            kwargs: dict = {"api_key": key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            client = OpenAI(**kwargs)
+            return sorted(m.id for m in client.models.list().data)
+
+    except BaseException:
+        pass
+    return None
+
+
 @config_app.command("providers")
 def providers() -> None:
     """List the supported AI providers and their default models."""
@@ -102,10 +161,14 @@ def providers() -> None:
 @config_app.command("models")
 def models(
     provider: Optional[str] = typer.Argument(
-        None, help="Show models for this provider only. Defaults to the active provider."
+        None, help="Provider to list models for. Defaults to the active provider."
+    ),
+    fetch: bool = typer.Option(
+        False, "--fetch", "-F",
+        help="Query the provider API for a live model list instead of the built-in one.",
     ),
 ) -> None:
-    """List known models for a provider (or the active one)."""
+    """List models for a provider — built-in curated list, or live from the API."""
     cfg = cfg_mod.load_config()
     target = (provider or cfg.provider).strip().lower()
     if target not in SUPPORTED_PROVIDERS:
@@ -116,6 +179,30 @@ def models(
         raise typer.Exit(code=1)
 
     active_model = cfg.resolved_model()
+
+    if fetch:
+        console.print(f"[dim]Querying {target} for available models…[/dim]")
+        live = _fetch_models_live(target, cfg)
+        if live is None:
+            console.print(
+                f"[yellow]Could not fetch models from {target}.[/yellow] "
+                "Check your API key and connection, then try again."
+            )
+            console.print("[dim]Falling back to built-in list…[/dim]")
+        else:
+            table = Table(title=f"Available models — {target} (live)", header_style="bold cyan")
+            table.add_column("Model")
+            for mid in live:
+                marker = " [green]●[/green]" if mid == active_model else ""
+                table.add_row(mid + marker)
+            console.print(table)
+            console.print(
+                f"[dim]Active: {active_model}{'  (default)' if not cfg.model else ''}\n"
+                "Set one with: critique config model <name>[/dim]"
+            )
+            return
+
+    # Built-in curated list
     table = Table(title=f"Known models — {target}", header_style="bold cyan")
     table.add_column("Model")
     table.add_column("Notes")
@@ -125,6 +212,7 @@ def models(
     console.print(table)
     console.print(
         f"[dim]Active: {active_model}{'  (default)' if not cfg.model else ''}\n"
+        "Tip: use --fetch / -F to query the provider API for the full live list.\n"
         "Set any model with: critique config model <name>[/dim]"
     )
 
