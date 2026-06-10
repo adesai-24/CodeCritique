@@ -53,6 +53,9 @@ It reviews **Python** and **C/C++** out of the box.
 - **Agent-ready output** — `check --json` emits one machine-readable JSON
   object on stdout with clean stream separation and `0`/`1` exit codes; see
   [AGENTS.md](AGENTS.md).
+- **Natural-language assistant** — `codecritique ask` answers questions about
+  the tool; `codecritique do` turns a plain-English request into a confirmed,
+  whitelisted plan of commands and runs it.
 
 ---
 
@@ -191,6 +194,9 @@ codecritique fix --unsafe                # also apply behavior-changing fixes
 codecritique install-hooks               # install the Git pre-push hook
 codecritique format                      # reshape code for review (see §8)
 
+codecritique ask how do I scan the whole repo    # plain-English Q&A about the tool
+codecritique do fix my files then run a check    # plain-English -> plan -> confirm -> run
+
 codecritique config languages            # list language choices
 codecritique config language cpp         # review only C/C++ files
 codecritique list                        # list saved reports
@@ -220,6 +226,40 @@ schema and agent usage guide.
 `fix` is the deterministic cleanup: ruff's safe autofixes plus `ruff format`,
 applied in place to changed files. `format` (§8) is the AI counterpart that
 reshapes code for review.
+
+### Natural-language assistant
+
+You don't have to remember any of the above. `ask` answers questions about the
+tool, grounded in the real command list so it can't invent features:
+
+```bash
+codecritique ask can you review C++ headers
+codecritique ask "what's the difference between fix and format?"
+```
+
+`do` goes one step further: describe what you want, and it builds a plan from
+a fixed whitelist of actions (`check`, `fix`, `format`, `list_reports`,
+`install_hooks`), shows you the plan, and only runs it after you confirm
+(`--yes` skips the prompt — handy for scripts):
+
+```bash
+codecritique do clean up my changed files, then run a full static check
+```
+
+The model can only pick from that whitelist — it never produces shell commands
+— and unknown actions or arguments in its plan are rejected before anything
+executes. Both commands use your configured AI provider (§6).
+
+### Shell tab-completion
+
+The CLI can complete commands and options as you type:
+
+```bash
+codecritique --install-completion    # one-time setup for your shell
+```
+
+Supported for bash, zsh, fish, and PowerShell; zsh also shows each command's
+description next to the suggestion. Restart your shell after installing.
 
 ---
 
