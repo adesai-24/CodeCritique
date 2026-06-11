@@ -3,6 +3,7 @@
 
 Examples
 --------
+    critique setup                                 # interactive first-run setup
     codecritique config show
     codecritique config providers
     codecritique config models                     # curated list for active provider
@@ -57,6 +58,7 @@ def show() -> None:
     table.add_row("temperature", str(cfg.temperature))
     table.add_row("timeout", str(cfg.timeout))
     table.add_row("language", cfg.language)
+    table.add_row("project_path", cfg.project_path or "[dim](not set — uses cwd)[/dim]")
     table.add_row("suggestion_mode", cfg.suggestion_mode)
     table.add_row("project_context", _short(cfg.project_context))
     table.add_row("custom_instructions", _short(cfg.custom_instructions))
@@ -388,10 +390,14 @@ def context(
     console.print("[green]Saved project context. The AI reviewer will use it on the next run.[/green]")
 
 
-@config_app.command("wizard")
-def wizard() -> None:
-    """Interactive setup: pick a provider, key, and review mode."""
+def run_setup_wizard() -> None:
+    """Interactive first-run setup — also callable as ``critique setup``."""
+    import os as _os
     console.print("[bold cyan]CodeCritique setup[/bold cyan]\n")
+
+    cwd = _os.getcwd()
+    cfg_mod.set_value("project_path", cwd)
+    console.print(f"[green]Project path set to:[/green] {cwd}\n")
 
     provider = typer.prompt(
         f"Provider ({'/'.join(SUPPORTED_PROVIDERS)})",
@@ -427,19 +433,19 @@ def wizard() -> None:
         console.print(f"[dim]Using default model: {current_model}[/dim]")
 
     mode_names = [p.name for p in profiles.list_profiles()]
-    chosen = typer.prompt(
+    chosen_mode = typer.prompt(
         f"Review mode ({'/'.join(mode_names)})",
         default=cfg_mod.load_config().suggestion_mode,
     ).strip().lower()
-    if profiles.is_valid_mode(chosen):
-        cfg_mod.set_value("suggestion_mode", chosen)
+    if profiles.is_valid_mode(chosen_mode):
+        cfg_mod.set_value("suggestion_mode", chosen_mode)
 
     if typer.confirm("Add project context for the AI reviewer?", default=False):
         ctx = typer.prompt("Project context")
         if ctx.strip():
             cfg_mod.set_value("project_context", ctx)
 
-    console.print("\n[bold green]Setup complete.[/bold green] Run 'codecritique config show' to review.")
+    console.print("\n[bold green]Setup complete.[/bold green] Run 'critique config show' to review.")
 
 
 @config_app.command("path")

@@ -1,5 +1,6 @@
 import difflib
 import json
+import os
 import typer
 from typing import Dict, List, Optional
 
@@ -10,7 +11,7 @@ from critique.ai.client import LLMClient
 from critique.runner import fix_files, run_all_checks, get_target_files
 from critique.git_utils import install_pre_push_hook
 from critique.persistence import list_reports, load_report
-from critique.config_cli import config_app
+from critique.config_cli import config_app, run_setup_wizard
 from critique.cache_cli import cache_app
 from critique.style_cli import style_app
 
@@ -22,6 +23,22 @@ app.add_typer(config_app, name="config")
 app.add_typer(cache_app, name="cache")
 app.add_typer(style_app, name="style")
 console = Console()
+
+
+@app.command()
+def setup() -> None:
+    """Interactive first-run setup: project path, provider, API key, model, and review mode."""
+    run_setup_wizard()
+
+
+def _apply_project_path(custom_files) -> None:
+    """If a project_path is configured and no explicit files were given, cd to it."""
+    if custom_files:
+        return
+    from critique.config import load_config
+    project_path = load_config().project_path
+    if project_path and os.path.isdir(project_path):
+        os.chdir(project_path)
 
 @app.command()
 def check(
@@ -49,6 +66,7 @@ def check(
 
     Exit codes: 0 = passed (no FATAL issues), 1 = failed.
     """
+    _apply_project_path(files)
     success = run_all_checks(
         incremental=incremental, custom_files=files, use_ai=ai,
         emit_json=json_output, learn=learn,
@@ -75,6 +93,7 @@ def fix(
     Runs `ruff check --fix` (safe fixes) followed by `ruff format` on the
     target files. Re-run `codecritique check` afterwards to see what remains.
     """
+    _apply_project_path(files)
     success = fix_files(incremental=incremental, custom_files=files, unsafe=unsafe)
     if not success:
         raise typer.Exit(code=1)
