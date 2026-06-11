@@ -106,6 +106,7 @@ class CritiqueConfig:
     temperature: float = 0.2
     timeout: int = 300
     language: str = "auto"              # auto, python, or cpp
+    project_path: Optional[str] = None  # project root; adopted from cwd during wizard
     # Review customization (see critique.profiles).
     suggestion_mode: str = "balanced"    # built-in review profile
     project_context: Optional[str] = None    # author-provided context for the AI
