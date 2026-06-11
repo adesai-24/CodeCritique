@@ -2,6 +2,26 @@
 
 All notable changes to CodeCritique will be documented in this file.
 
+## 0.2.2 - 2026-06-10
+
+- **Multi-language style learning**: `style learn` now respects the configured
+  language setting instead of being hardcoded to Python. C++ projects get
+  comment-density and naming-convention analysis; `auto` mode handles mixed
+  repos file-by-file.
+- **Model management**: `critique config models [provider]` prints a table of
+  known models for the active or specified provider, marking the current
+  selection. `critique config model <name>` is a dedicated shorthand for
+  switching models; `config model none` resets to the provider default.
+- **Live model discovery**: `critique config models --fetch` queries the
+  provider's API (Gemini, Anthropic, OpenAI/vLLM, Ollama) for its full,
+  up-to-date model list. Falls back to the built-in curated list on failure.
+- **Project path setup**: new `project_path` config field lets the tool
+  remember which directory to review. `check` and `fix` automatically `cd`
+  there when no explicit file list is given.
+- **Top-level `setup` command**: replaces `config wizard`; auto-adopts the
+  current directory as `project_path` and prompts for provider, API key,
+  model, and mode in one step.
+
 ## 0.2.1 - 2026-06-10
 
 - `codecritique do` can now change settings: a `set_config` action lets plain
